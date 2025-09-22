@@ -1,0 +1,15 @@
+[package]
+name = "collar"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.42"
+dotenvy = "0.15.7"
+poise = { version = "0.6.1", features = ["cache", "chrono"] }
+reqwest = { version = "0.12.23", features = ["json"] }
+serde = { version = "1.0.226", features = ["derive", "serde_derive"] }
+serde_json = "1.0.145"
+tokio = { version = "1.47.1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.20"
