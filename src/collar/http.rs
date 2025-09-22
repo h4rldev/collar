@@ -1,15 +1,15 @@
 use std::{
     fmt::Debug,
     io::{Read, Write},
+    time::Duration,
 };
 
-use crate::collar::Collar;
-
-use super::{CollarError, Secrets};
-use chrono::Utc;
+use super::{Collar, CollarError, Secrets};
 use dotenvy::dotenv;
-use reqwest::{Client, Method};
+use reqwest::{Client, Method, StatusCode};
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
+#[allow(unused_imports)]
 use tracing::{debug, error, info};
 
 pub async fn make_reqwest_client() -> Result<Client, CollarError> {
@@ -25,29 +25,55 @@ pub(crate) async fn get_secrets(client: Client, base_url: String) -> Result<Secr
     dotenv().ok();
     let token = std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_BOT_TOKEN");
 
-    let url = format!("{base_url}/bot/setup");
-
     let body = GetSecretsRequest { bot_token: token };
-    let resp = client.post(url).json(&body).send().await?;
+    let mut status: StatusCode = StatusCode::IM_A_TEAPOT;
+    let mut response: String = String::new();
 
-    if !resp.status().is_success() && resp.status() == 409 {
-        let mut file_to_read = std::fs::File::open(".secrets.json").unwrap();
-        let mut secrets_str = String::new();
-        file_to_read.read_to_string(&mut secrets_str).unwrap();
-        let secrets: Secrets = serde_json::from_str(&secrets_str).unwrap();
+    while status == StatusCode::IM_A_TEAPOT {
+        let url = format!("{base_url}/bot/setup");
+        let resp = client
+            .post(url)
+            .json(&body)
+            .timeout(Duration::from_secs(60));
+        let got_response = match resp.send().await {
+            Ok(response) => {
+                status = response.status();
+                response.text().await?
+            }
+            Err(_) => {
+                sleep(Duration::from_secs(1)).await;
+                error!("Failed to get secrets: {status:?}, retrying");
+                continue;
+            }
+        };
 
-        if secrets.refresh_token_expires_at < Utc::now().timestamp() {
-            return Err(CollarError::from("Cached Refresh token expired"));
-        }
-        return Ok(secrets);
+        response = got_response;
+        break;
     }
 
-    let secrets = resp.json().await?;
+    if !status.is_success() {
+        let mut file_to_read = match std::fs::File::open(".secrets.json") {
+            Ok(file) => file,
+            Err(_) => {
+                error!("Failed to get secrets: {status:?}");
+                return Err(CollarError::from("Failed to get secrets"));
+            }
+        };
+        let mut secrets_str = String::new();
+        match file_to_read.read_to_string(&mut secrets_str) {
+            Ok(_) => (),
+            Err(err) => {
+                error!("Failed to read secrets file: {err}");
+                return Err(CollarError::from("Failed to get secrets from file"));
+            }
+        };
 
-    let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
-    let secrets_str = serde_json::to_string(&secrets).unwrap();
-    file_to_write.write_all(secrets_str.as_bytes()).unwrap();
+        response = secrets_str;
+    }
 
+    let secrets = serde_json::from_str(&response).unwrap();
+
+    /**/
     Ok(secrets)
 }
 
@@ -57,32 +83,55 @@ struct RefreshTokenRequest {
     refresh_token: String,
 }
 
-pub(crate) async fn refresh_access_token(
+pub(crate) async fn refresh_secrets(
     base_url: String,
     client: Client,
     refresh_token: String,
     access_token: String,
 ) -> Result<Secrets, CollarError> {
-    let url = format!("{base_url}/bot/refresh");
-
     let body = RefreshTokenRequest {
         access_token,
         refresh_token,
     };
-    let resp = client.post(url).json(&body).send().await?;
-    let response = resp.text().await?;
-    info!("Refreshed secrets: {response:?}");
 
-    //let secrets: Secrets = resp.json().await?;
+    let mut response = String::new();
+    let mut status: StatusCode = StatusCode::IM_A_TEAPOT;
+
+    while response.is_empty() && status == StatusCode::IM_A_TEAPOT {
+        let url = format!("{base_url}/bot/refresh");
+        let resp = client.post(url).json(&body);
+        match resp.send().await {
+            Ok(resp) => {
+                status = resp.status();
+                response = resp.text().await?;
+                break;
+            }
+            Err(_) => {
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        }
+    }
+
+    if !status.is_success() {
+        let error: ErrorResponse = serde_json::from_str(&response).unwrap();
+        error!("Failed to refresh secrets: {error:?}");
+        return Err(CollarError::from(format!(
+            "Failed to refresh secrets: {} - {}",
+            error.status, error.message
+        )));
+    }
+
+    info!("Got response");
 
     let secrets: Secrets = serde_json::from_str(&response).unwrap();
 
-    //info!("Refreshed secrets: {secrets:?}");
+    info!("Refreshed secrets");
 
-    /*let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
-        let secrets_str = serde_json::to_string(&secrets).unwrap();
-        file_to_write.write_all(secrets_str.as_bytes()).unwrap();
-    */
+    let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
+    let secrets_str = serde_json::to_string(&secrets).unwrap();
+    file_to_write.write_all(secrets_str.as_bytes()).unwrap();
+
     Ok(secrets)
 }
 
@@ -154,8 +203,8 @@ where
     }
 
     if resp.status() == 401 {
-        info!("invalid token, refreshing");
-        let new_secrets = refresh_access_token(
+        info!("Invalid token, refreshing secrets");
+        let new_secrets = refresh_secrets(
             collar.api_base_url.clone(),
             client.clone(),
             secrets.refresh_token.clone(),

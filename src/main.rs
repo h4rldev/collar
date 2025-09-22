@@ -1,9 +1,10 @@
 use collar::{
     Collar,
-    commands::{get, me, submit, verify},
+    commands::{edit, get, get_notif_channel, me, remove_user, set_notif_channel, submit, verify},
 };
 use dotenvy::dotenv;
-use poise::serenity_prelude as serenity;
+use poise::{Framework, serenity_prelude as serenity};
+use serenity::{Context, Ready};
 use tracing_subscriber::{
     field::MakeExt,
     fmt::{Subscriber, format::debug_fn},
@@ -11,10 +12,25 @@ use tracing_subscriber::{
 
 mod collar;
 
+async fn setup<U, E>(
+    ctx: &Context,
+    _ready: &Ready,
+    framework: &Framework<U, E>,
+) -> Result<Collar, E>
+where
+    U: Send + Sync,
+    E: Send + Sync + From<poise::serenity_prelude::Error>,
+{
+    dotenv().ok();
+    let base_url = std::env::var("WEBRING_BASE_URL").expect("missing WEBRING_BASE_URL");
+
+    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+    Ok(Collar::new(Some(base_url)).await)
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-
     let formatter =
         debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}")).delimited(",");
 
@@ -25,20 +41,23 @@ async fn main() {
         .init();
 
     let token = std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_TOKEN");
-    let base_url = std::env::var("WEBRING_BASE_URL").expect("missing WEBRING_BASE_URL");
     let intents = serenity::GatewayIntents::non_privileged();
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![me(), get(), submit(), verify()],
+            commands: vec![
+                me(),
+                get(),
+                submit(),
+                verify(),
+                edit(),
+                remove_user(),
+                set_notif_channel(),
+                get_notif_channel(),
+            ],
             ..Default::default()
         })
-        .setup(|ctx, _ready, framework| {
-            Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Collar::new(Some(base_url)).await)
-            })
-        })
+        .setup(|ctx, ready, framework| Box::pin(async move { setup(ctx, ready, framework).await }))
         .build();
 
     let client = serenity::ClientBuilder::new(token, intents)

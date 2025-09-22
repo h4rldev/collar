@@ -2,3 +2,4 @@
 /.direnv
 .env
 .secrets.json
+.notif_channel_id.json

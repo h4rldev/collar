@@ -25,9 +25,15 @@ pub(crate) struct Secrets {
 #[derive(Clone)]
 pub(crate) struct Collar {
     secrets: Arc<Mutex<Secrets>>,
+    notif_channel_id: Arc<Mutex<Option<u64>>>,
     client: Client,
     api_base_url: String,
     bot_id: UserId,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct NotifChannel {
+    id: u64,
 }
 
 impl Collar {
@@ -51,8 +57,23 @@ impl Collar {
 
         let bot_id = std::env::var("BOT_ID").expect("missing BOT_ID");
 
+        let notif_channel_id_buf =
+            std::fs::read_to_string(".notif_channel_id.json").unwrap_or_default();
+
+        let notif_channel_id: NotifChannel = if notif_channel_id_buf.is_empty() {
+            NotifChannel { id: 0 }
+        } else {
+            serde_json::from_str(&notif_channel_id_buf).unwrap()
+        };
+
+        let actual_notif_channel_id = match notif_channel_id.id {
+            0 => None,
+            id => Some(id),
+        };
+
         Self {
             secrets: Arc::new(Mutex::new(secrets)),
+            notif_channel_id: Arc::new(Mutex::new(actual_notif_channel_id)),
             client,
             api_base_url: base_url,
             bot_id: bot_id.parse::<UserId>().unwrap(),
