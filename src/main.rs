@@ -1,13 +1,13 @@
 use collar::{
+    commands::{notifications, petads, petring},
     Collar,
-    commands::{edit, get, get_notif_channel, me, remove_user, set_notif_channel, submit, verify},
 };
 use dotenvy::dotenv;
-use poise::{Framework, serenity_prelude as serenity};
+use poise::{serenity_prelude as serenity, Framework};
 use serenity::{Context, Ready};
 use tracing_subscriber::{
     field::MakeExt,
-    fmt::{Subscriber, format::debug_fn},
+    fmt::{format::debug_fn, Subscriber},
 };
 
 mod collar;
@@ -25,6 +25,7 @@ where
     let base_url = std::env::var("WEBRING_BASE_URL").expect("missing WEBRING_BASE_URL");
 
     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+
     Ok(Collar::new(Some(base_url)).await)
 }
 
@@ -46,14 +47,18 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
-                me(),
-                get(),
-                submit(),
-                verify(),
-                edit(),
-                remove_user(),
-                set_notif_channel(),
-                get_notif_channel(),
+                petring::me(),
+                petring::get_user(),
+                petring::submit_user(),
+                petring::verify_user(),
+                petring::edit_user(),
+                petring::remove_user(),
+                notifications::set_notif_channel(),
+                notifications::get_notif_channel(),
+                petads::submit_ad(),
+                petads::verify_ad(),
+                petads::remove_ad(),
+                petads::edit_ad(),
             ],
             ..Default::default()
         })

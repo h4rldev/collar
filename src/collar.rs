@@ -4,7 +4,11 @@ use dotenvy::dotenv;
 use poise::serenity_prelude::UserId;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::{
+    sync::Mutex,
+    time::{interval_at, Duration, Instant},
+};
+use tracing::info;
 
 pub(crate) mod commands;
 pub(crate) mod http;
@@ -25,16 +29,20 @@ pub(crate) struct Secrets {
 #[derive(Clone)]
 pub(crate) struct Collar {
     secrets: Arc<Mutex<Secrets>>,
-    notif_channel_id: Arc<Mutex<Option<u64>>>,
+    notif_channel_ids: Arc<Mutex<NotifChannels>>,
     client: Client,
     api_base_url: String,
     bot_id: UserId,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct NotifChannel {
-    id: u64,
+struct NotifChannels {
+    submit_id: Option<u64>,
+    verify_id: Option<u64>,
+    general_id: Option<u64>,
 }
+
+pub const COLLAR_FOOTER: &str = "Collar :3, a Discord bot helper for PetRing and PetAds :3";
 
 impl Collar {
     pub async fn new(base_url: Option<String>) -> Self {
@@ -50,32 +58,65 @@ impl Collar {
             None => "http://localhost:8080".to_string(),
         };
 
-        let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
-            Ok(secrets) => secrets,
-            Err(e) => panic!("Failed to get secrets: {:?}", e),
-        };
-
         let bot_id = std::env::var("BOT_ID").expect("missing BOT_ID");
 
         let notif_channel_id_buf =
             std::fs::read_to_string(".notif_channel_id.json").unwrap_or_default();
 
-        let notif_channel_id: NotifChannel = if notif_channel_id_buf.is_empty() {
-            NotifChannel { id: 0 }
+        let notif_channel_ids: NotifChannels = if notif_channel_id_buf.is_empty() {
+            NotifChannels {
+                submit_id: None,
+                verify_id: None,
+                general_id: None,
+            }
         } else {
             serde_json::from_str(&notif_channel_id_buf).unwrap()
         };
 
-        let actual_notif_channel_id = match notif_channel_id.id {
-            0 => None,
-            id => Some(id),
+        let client_clone = client.clone();
+        let base_url_clone = base_url.clone();
+        let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
+            Ok(secrets) => secrets,
+            Err(e) => panic!("Failed to get secrets: {:?}", e),
         };
+
+        let mut interval = interval_at(
+            Instant::now() + Duration::from_secs(30 * 60),
+            Duration::from_secs(30 * 60),
+        );
+        tokio::spawn(async move {
+            let client = match http::make_reqwest_client().await {
+                Ok(client) => client,
+                Err(e) => panic!("Failed to create reqwest client: {:?}", e),
+            };
+
+            let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
+                Ok(secrets) => secrets,
+                Err(e) => panic!("Failed to get secrets: {:?}", e),
+            };
+
+            loop {
+                info!("Starting background token refresh");
+                interval.tick().await;
+                match http::refresh_secrets(
+                    base_url.clone(),
+                    client.clone(),
+                    secrets.refresh_token.clone(),
+                    secrets.access_token.clone(),
+                )
+                .await
+                {
+                    Ok(_) => {}
+                    Err(e) => panic!("Failed to refresh secrets: {:?}", e),
+                }
+            }
+        });
 
         Self {
             secrets: Arc::new(Mutex::new(secrets)),
-            notif_channel_id: Arc::new(Mutex::new(actual_notif_channel_id)),
-            client,
-            api_base_url: base_url,
+            notif_channel_ids: Arc::new(Mutex::new(notif_channel_ids)),
+            client: client_clone,
+            api_base_url: base_url_clone,
             bot_id: bot_id.parse::<UserId>().unwrap(),
         }
     }

@@ -73,7 +73,11 @@ pub(crate) async fn get_secrets(client: Client, base_url: String) -> Result<Secr
 
     let secrets = serde_json::from_str(&response).unwrap();
 
-    /**/
+    info!("Got secrets");
+    let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
+    let secrets_str = serde_json::to_string(&secrets).unwrap();
+    file_to_write.write_all(secrets_str.as_bytes()).unwrap();
+
     Ok(secrets)
 }
 
