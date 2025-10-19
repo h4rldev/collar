@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use dotenvy::dotenv;
-use poise::serenity_prelude::UserId;
+use poise::serenity_prelude::{CreateEmbed, CreateEmbedFooter, UserId};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::Mutex,
-    time::{interval_at, Duration, Instant},
+    time::{Duration, Instant, interval_at},
 };
 use tracing::info;
 
@@ -39,7 +39,39 @@ pub(crate) struct Collar {
 struct NotifChannels {
     submit_id: Option<u64>,
     verify_id: Option<u64>,
+    fallback_id: Option<u64>,
     general_id: Option<u64>,
+}
+
+struct EmbedWrapper(CreateEmbed);
+impl EmbedWrapper {
+    fn new_normal(ctx: &CollarContext<'_>) -> Self {
+        let bot_pfp = ctx
+            .cache()
+            .user(ctx.data().bot_id)
+            .unwrap()
+            .avatar_url()
+            .unwrap(); // if
+        // this fails to unwrap, i'll buy myself a beer
+
+        EmbedWrapper(
+            CreateEmbed::default().footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp)),
+        )
+    }
+
+    fn new_application(ctx: &CollarAppContext<'_>) -> Self {
+        let bot_pfp = ctx
+            .cache()
+            .user(ctx.data().bot_id)
+            .unwrap()
+            .avatar_url()
+            .unwrap(); // if
+        // this fails to unwrap, i'll buy myself a beer
+
+        EmbedWrapper(
+            CreateEmbed::default().footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp)),
+        )
+    }
 }
 
 pub const COLLAR_FOOTER: &str = "Collar :3, a Discord bot helper for PetRing and PetAds :3";
@@ -67,6 +99,7 @@ impl Collar {
             NotifChannels {
                 submit_id: None,
                 verify_id: None,
+                fallback_id: None,
                 general_id: None,
             }
         } else {

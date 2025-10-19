@@ -1,14 +1,13 @@
+use crate::collar::EmbedWrapper;
+
 use super::{
-    http::{make_request, ErrorResponse, ResponseTypes},
-    notifs::{
-        send_delete_user_notif, send_edit_user_notif, send_submit_user_notif,
-        send_verify_user_notif_dm,
-    },
-    AddWebsite, CollarAppContext, CollarContext, CollarError, EditSubmission, EditedUser, User,
-    UserEditSubmission, UserSubmission, COLLAR_FOOTER,
+    AddWebsite, COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, EditSubmission,
+    EditedUser, User, UserEditSubmission, UserSubmission,
+    http::{ErrorResponse, ResponseTypes, make_request},
+    notifs::{Notif, SubmitType},
 };
 use chrono::DateTime;
-use poise::{command, serenity_prelude as serenity, CreateReply, Modal};
+use poise::{CreateReply, Modal, command, serenity_prelude as serenity};
 use reqwest::Method;
 use serenity::{
     Color, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, FormattedTimestamp,
@@ -253,6 +252,11 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
     let user_id = ctx.author().id;
 
+    let guild_id = match ctx.guild_id() {
+        Some(guild_id) => guild_id,
+        None => return Err("Failed to get guild id".into()),
+    };
+
     let modal_data = AddWebsite::execute(ctx).await?;
     let modal_data = match modal_data {
         Some(modal_data) => modal_data,
@@ -291,7 +295,6 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     match response {
         ResponseTypes::Success(user) => {
             let user: User = user;
-            let cloned_user = user.clone();
             let user_id_u64: u64 = user_id.into();
 
             if user_id_u64 != user.discord_id {
@@ -305,6 +308,14 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 }
             };
 
+            let joined_at_timestamp =
+                match ctx.http().get_member(guild_id, user_id).await?.joined_at {
+                    Some(joined_at) => joined_at,
+                    None => return Err("Failed to get joined at".into()),
+                };
+
+            let user_created_at_timestamp = ctx.http().get_user(user_id).await?.created_at();
+
             let created_at_timestamp =
                 Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at).unwrap());
 
@@ -314,19 +325,52 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             )
             .to_string();
 
+            let formatted_joined_at_timestamp = FormattedTimestamp::new(
+                joined_at_timestamp,
+                Some(FormattedTimestampStyle::RelativeTime),
+            )
+            .to_string();
+
+            let formatted_user_created_at_timestamp = FormattedTimestamp::new(
+                user_created_at_timestamp,
+                Some(FormattedTimestampStyle::LongDateTime),
+            )
+            .to_string();
+
             let embed = CreateEmbed::default()
                 .title("Your submission was successful! :3")
                 .author(CreateEmbedAuthor::new(user.username))
                 .thumbnail(avatar_url)
-                .field("User Website", user.url, false)
+                .field("User Website", user.url.clone(), false)
                 .field(
                     "Verification",
                     "You're not verified yet, but we'll let you know when you are :3",
                     false,
                 )
-                .field("Created", formatted_created_at_timestamp, false)
+                .field("Created", formatted_created_at_timestamp.clone(), false)
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 0, 255));
+
+            let mut submission_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("New submission :3")
+                .author(CreateEmbedAuthor::new(format!(
+                    "from: {}",
+                    ctx.author().name
+                )))
+                .field("Website", user.url, false)
+                .field("Created at", formatted_created_at_timestamp, false)
+                .field("User joined at", formatted_joined_at_timestamp, false)
+                .field(
+                    "User Created at",
+                    formatted_user_created_at_timestamp,
+                    false,
+                )
+                .color(Color::from_rgb(0, 0, 255));
+
+            if let Some(reason) = reason {
+                submission_embed = submission_embed.description(reason);
+            }
 
             let reply = CreateReply::default()
                 .embed(embed)
@@ -334,7 +378,9 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 .ephemeral(true);
             ctx.send(reply).await?;
 
-            send_submit_user_notif(ctx, cloned_user, reason).await?;
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(submission_embed);
+            notif.submit(&ctx, user_id.get(), SubmitType::User).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;
@@ -465,11 +511,20 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
             let mut embed = serenity::CreateEmbed::default()
                 .title("Your edit was successful! :3")
-                .thumbnail(avatar_url)
-                .field("Created", formatted_created_at_timestamp, false)
-                .field("Verified", formatted_verified_at_timestamp, false)
-                .field("Edited", formatted_edited_at_timestamp, false)
+                .thumbnail(avatar_url.clone())
+                .field("Created", &formatted_created_at_timestamp, false)
+                .field("Verified", &formatted_verified_at_timestamp, false)
+                .field("Edited", &formatted_edited_at_timestamp, false)
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
+                .color(Color::from_rgb(0, 255, 0));
+
+            let mut user_edit_notif_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("User edited :3")
+                .thumbnail(avatar_url)
+                .field("Created", &formatted_created_at_timestamp, false)
+                .field("Verified", &formatted_verified_at_timestamp, false)
+                .field("Edited", &formatted_edited_at_timestamp, false)
                 .color(Color::from_rgb(0, 255, 0));
 
             if user.new.username != user.old.username {
@@ -478,7 +533,24 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                         "{} → {}",
                         user.old.username, user.new.username
                     ))
+                    .url(user_url.clone()),
+                );
+
+                user_edit_notif_embed = user_edit_notif_embed.author(
+                    CreateEmbedAuthor::new(format!(
+                        "{} → {}",
+                        user.old.username, user.new.username
+                    ))
                     .url(user_url),
+                );
+            } else {
+                embed = embed.author(
+                    CreateEmbedAuthor::new(format!("{} (press here to visit)", user.new.username))
+                        .url(user_url.clone()),
+                );
+                user_edit_notif_embed = user_edit_notif_embed.author(
+                    CreateEmbedAuthor::new(format!("{} (press here to visit)", user.new.username))
+                        .url(user_url),
                 );
             }
 
@@ -488,6 +560,15 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                     format!("{} → {}", user.old.url, user.new.url),
                     false,
                 );
+                user_edit_notif_embed = user_edit_notif_embed.field(
+                    "Website",
+                    format!("{} → {}", user.old.url, user.new.url),
+                    false,
+                );
+            } else {
+                embed = embed.field("Website", user.new.url.clone(), false);
+                user_edit_notif_embed =
+                    user_edit_notif_embed.field("Website", user.new.url.clone(), false);
             }
 
             let reply = CreateReply::default()
@@ -495,7 +576,10 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
-            send_edit_user_notif(ctx, user).await?;
+
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(user_edit_notif_embed);
+            notif.general(&ctx).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;
@@ -533,6 +617,9 @@ pub async fn verify_user(
 ) -> Result<(), CollarError> {
     let user_id = user.id;
     let url = format!("/api/put/user/verify/{}", user_id);
+
+    let user_name = user.clone().name;
+    let user_mention = user.mention();
 
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
@@ -578,13 +665,22 @@ pub async fn verify_user(
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp.clone()))
                 .color(Color::from_rgb(0, 255, 0));
 
+            let dm_user_verify_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("You've been verified!!")
+                .description(format!("Hi there, {user_mention}, you've been verified :3"))
+                .author(CreateEmbedAuthor::new(user_name))
+                .color(Color::from_rgb(0, 255, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
             info!("Sending user notif dm");
-            send_verify_user_notif_dm(ctx, user).await?;
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(dm_user_verify_embed);
+            notif.dm_notif(&ctx, user_id.get()).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;
@@ -647,12 +743,24 @@ pub async fn remove_user(
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(serenity::Color::from_rgb(255, 0, 0));
 
+            let user_delete_notif_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("User deleted 3:")
+                .description(format!(
+                    "{user_mention}, also known as {} got their spot deleted in the petring 3':",
+                    deleted_user.username
+                ))
+                .color(serenity::Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
-            send_delete_user_notif(ctx, deleted_user).await?;
+
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(user_delete_notif_embed);
+            notif.general(&ctx).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;

@@ -1,7 +1,7 @@
 use std::io::Write;
 
-use super::{CollarContext, CollarError, NotifChannelType, COLLAR_FOOTER};
-use poise::{command, serenity_prelude as serenity, CreateReply};
+use super::{COLLAR_FOOTER, CollarContext, CollarError, NotifChannelType};
+use poise::{CreateReply, command, serenity_prelude as serenity};
 use serenity::{Color, CreateEmbed, CreateEmbedFooter};
 use tracing::{error, info};
 
@@ -58,6 +58,10 @@ pub async fn set_notif_channel(
             info!("Setting notif_channel_id.general_id to {}", channel.id());
             notif_channel_id.general_id = Some(channel.id().into());
         }
+        NotifChannelType::Fallback => {
+            info!("Setting notif_channel_id.fallback_id to {}", channel.id());
+            notif_channel_id.fallback_id = Some(channel.id().into());
+        }
     }
 
     let mut file_to_write = match std::fs::File::create(".notif_channel_id.json") {
@@ -96,12 +100,14 @@ pub async fn set_notif_channel(
         NotifChannelType::Submit => "Submit",
         NotifChannelType::Verify => "Verify",
         NotifChannelType::General => "General",
+        NotifChannelType::Fallback => "Fallback",
     };
 
     let channel_type_desc = match channel_type {
         NotifChannelType::Submit => "when someone submits a website or ad",
         NotifChannelType::Verify => "when someone verifies a website or ad",
         NotifChannelType::General => "when someone deletes, edits a website or ad",
+        NotifChannelType::Fallback => "when the bot fails to dm a user",
     };
 
     let embed = CreateEmbed::default()
@@ -148,6 +154,7 @@ pub async fn get_notif_channel(
         NotifChannelType::Submit => channel_id.submit_id,
         NotifChannelType::Verify => channel_id.verify_id,
         NotifChannelType::General => channel_id.general_id,
+        NotifChannelType::Fallback => channel_id.fallback_id,
     };
 
     let channel_id = match channel_id {
@@ -169,12 +176,14 @@ pub async fn get_notif_channel(
         NotifChannelType::Submit => "Submit",
         NotifChannelType::Verify => "Verify",
         NotifChannelType::General => "General",
+        NotifChannelType::Fallback => "Fallback",
     };
 
     let channel_type_desc = match channel_type {
         NotifChannelType::Submit => "when someone submits a website or ad",
         NotifChannelType::Verify => "when someone verifies a website or ad",
         NotifChannelType::General => "when someone deletes, edits a website or ad",
+        NotifChannelType::Fallback => "when the bot fails to dm a user",
     };
 
     let embed = serenity::CreateEmbed::default()

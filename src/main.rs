@@ -1,13 +1,13 @@
 use collar::{
-    commands::{notifications, petads, petring},
     Collar,
+    commands::{notifications, petads, petring},
 };
 use dotenvy::dotenv;
-use poise::{serenity_prelude as serenity, Framework};
-use serenity::{Context, Ready};
+use poise::{Framework, serenity_prelude as serenity};
+use serenity::{ClientBuilder, Context, Ready};
 use tracing_subscriber::{
     field::MakeExt,
-    fmt::{format::debug_fn, Subscriber},
+    fmt::{Subscriber, format::debug_fn},
 };
 
 mod collar;
@@ -65,7 +65,7 @@ async fn main() {
         .setup(|ctx, ready, framework| Box::pin(async move { setup(ctx, ready, framework).await }))
         .build();
 
-    let client = serenity::ClientBuilder::new(token, intents)
+    let client = ClientBuilder::new(token, intents)
         .framework(framework)
         .await;
 

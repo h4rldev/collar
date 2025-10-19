@@ -1,13 +1,13 @@
+use crate::collar::EmbedWrapper;
+
 use super::{
-    http::{make_request, ErrorResponse, ResponseTypes},
-    notifs::{
-        send_delete_ad_notif, send_edit_ad_notif, send_submit_ad_notif, send_verify_ad_notif_dm,
-    },
-    Ad, AdEditSubmission, AdSubmission, CollarAppContext, CollarError, ImageSubmission,
-    COLLAR_FOOTER,
+    Ad, AdEditSubmission, AdSubmission, COLLAR_FOOTER, CollarAppContext, CollarError,
+    ImageSubmission,
+    http::{ErrorResponse, ResponseTypes, make_request},
+    notifs::{Notif, SubmitType},
 };
 use chrono::DateTime;
-use poise::{command, serenity_prelude as serenity, CreateReply, Modal};
+use poise::{CreateReply, Modal, command, serenity_prelude as serenity};
 use reqwest::Method;
 use serenity::{
     Color, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, FormattedTimestamp,
@@ -32,7 +32,7 @@ use tracing::info;
 pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
-                                                                           //
+
     let modal_data = AdSubmission::execute(ctx).await?;
     let modal_data = match modal_data {
         Some(modal_data) => modal_data,
@@ -64,7 +64,6 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     match response {
         ResponseTypes::Success(ad) => {
             let ad: Ad = ad;
-            let cloned_ad = ad.clone();
 
             let user_id_u64: u64 = ctx.author().id.into();
 
@@ -95,7 +94,7 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 )
                 .thumbnail(avatar_url)
                 .image(ad.image_url)
-                .field("Ad url", ad.ad_url, false)
+                .field("Ad url", ad.ad_url.clone(), false)
                 .field("Created at", formatted_created_at_timestamp, false)
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 255, 0));
@@ -105,7 +104,17 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
-            send_submit_ad_notif(ctx, cloned_ad).await?;
+
+            let submission_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("New ad submission :3")
+                .author(CreateEmbedAuthor::new(format!("from: {}", ad.username)))
+                .field("Website", ad.ad_url, false)
+                .color(serenity::Color::from_rgb(0, 0, 255));
+
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(submission_embed);
+            notif.submit(&ctx, ad.discord_id, SubmitType::Ad).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;
@@ -142,7 +151,11 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
-                                                                           //
+
+    let user = ctx.author();
+    let user_mention = user.mention();
+    let user_pfp = user.avatar_url().unwrap();
+
     let modal_data = AdEditSubmission::execute(ctx).await?;
     let modal_data = match modal_data {
         Some(modal_data) => modal_data,
@@ -202,7 +215,7 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             )
             .to_string();
 
-            let verified_at_timestamp = FormattedTimestamp::new(
+            let formatted_verified_at_timestamp = FormattedTimestamp::new(
                 Timestamp::from(DateTime::parse_from_rfc3339(&ad.verified_at)?),
                 Some(FormattedTimestampStyle::LongDateTime),
             )
@@ -217,9 +230,9 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 .thumbnail(avatar_url)
                 .image(ad.image_url.clone())
                 .field("Ad url", ad.ad_url.clone(), false)
-                .field("Created", formatted_created_at_timestamp, false)
-                .field("Edited", formatted_edited_at_timestamp, false)
-                .field("Verified", verified_at_timestamp, false)
+                .field("Created", &formatted_created_at_timestamp, false)
+                .field("Edited", &formatted_edited_at_timestamp, false)
+                .field("Verified", &formatted_verified_at_timestamp, false)
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 255, 0));
 
@@ -228,7 +241,21 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
-            send_edit_ad_notif(ctx, ad).await?;
+
+            let edit_notif_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("Ad edited :3")
+                .description(format!("{user_mention} has edited their ad in PetAds :3"))
+                .field("Created", &formatted_created_at_timestamp, false)
+                .field("Verified", &formatted_verified_at_timestamp, false)
+                .field("Edited", &formatted_edited_at_timestamp, false)
+                .thumbnail(user_pfp)
+                .image(ad.image_url)
+                .color(Color::from_rgb(0, 255, 0));
+
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(edit_notif_embed);
+            notif.general(&ctx).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;
@@ -260,6 +287,8 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Result<(), CollarError> {
     let user_id = user.id;
     let url = format!("/api/put/ad/verify/{}", user_id);
+
+    let user_mention = ctx.http().get_user(user_id).await?.mention();
 
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
@@ -305,13 +334,25 @@ pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 255, 0));
 
+            let dm_ad_verify_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("Your ad was verified!!")
+                .description(format!(
+                    "Hi, there, {user_mention}, your ad has been verified :3"
+                ))
+                .author(CreateEmbedAuthor::new(user.name.clone()))
+                .color(Color::from_rgb(0, 255, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
             info!("Sending verify ad notif dm");
-            send_verify_ad_notif_dm(ctx, ad).await?;
+
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(dm_ad_verify_embed);
+            notif.dm_notif(&ctx, user_id.get()).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;
@@ -350,6 +391,10 @@ pub async fn remove_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
     let user_id = user.id;
     let url = format!("/api/delete/ad/by-discord/{}", user_id);
 
+    let user_name = user.clone().name;
+    let user_mention = user.mention();
+    let user_pfp = user.avatar_url().unwrap();
+
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
@@ -363,13 +408,10 @@ pub async fn remove_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
                 return Err("Ad not found".into());
             }
 
-            let ad_mention = ctx.http().get_user(user_id).await?.mention();
-            let user_pfp = ctx.http().get_user(user_id).await?.avatar_url().unwrap();
-
             let embed = serenity::CreateEmbed::default()
                 .title("Successfully removed ad :3")
                 .description(format!(
-                    "{ad_mention}'s Ad for {}: removed :3",
+                    "{user_mention}'s Ad for {}: removed :3",
                     deleted_ad.ad_url
                 ))
                 .thumbnail(user_pfp)
@@ -377,12 +419,34 @@ pub async fn remove_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
                 .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(serenity::Color::from_rgb(255, 0, 0));
 
+            let formatted_created_at_timestamp = FormattedTimestamp::new(
+                Timestamp::from(DateTime::parse_from_rfc3339(&deleted_ad.created_at)?),
+                Some(FormattedTimestampStyle::LongDateTime),
+            )
+            .to_string();
+
+            let delete_ad_notif_embed = EmbedWrapper::new_application(&ctx)
+                .0
+                .title("Ad deleted 3:")
+                .description(format!(
+                    "{user_mention}, also known as {} got their ad deleted in PetAds 3':",
+                    deleted_ad.username
+                ))
+                .author(CreateEmbedAuthor::new(user_name))
+                .field("Website", deleted_ad.ad_url.clone(), false)
+                .field("Verified", deleted_ad.verified.to_string(), false)
+                .field("Created", formatted_created_at_timestamp, false)
+                .color(serenity::Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
             ctx.send(reply).await?;
-            send_delete_ad_notif(ctx, deleted_ad).await?;
+
+            let mut notif = Notif::new(&ctx);
+            notif = notif.set_embed(delete_ad_notif_embed);
+            notif.general(&ctx).await?;
         }
         ResponseTypes::Error(error) => {
             let error: ErrorResponse = error;

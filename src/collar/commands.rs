@@ -1,4 +1,4 @@
-use super::{http, notifs, CollarAppContext, CollarContext, CollarError, COLLAR_FOOTER};
+use super::{COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, http, notifs};
 use poise::{ChoiceParameter, Modal};
 use serde::{Deserialize, Serialize};
 
@@ -116,4 +116,7 @@ pub enum NotifChannelType {
     #[name = "General"]
     #[name = "Notification channel for when someone deletes, edits a website or ad"]
     General,
+    #[name = "Fallback"]
+    #[name = "Incase User DM fails, send the message to this channel instead"]
+    Fallback,
 }
