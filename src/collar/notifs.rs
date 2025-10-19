@@ -311,9 +311,9 @@ impl Notif {
         Self { embed }
     }
 
-    pub fn get_embed(self) -> CreateEmbed {
+    /*pub fn get_embed(self) -> CreateEmbed {
         self.embed
-    }
+    }*/
 
     pub fn set_embed(mut self, embed: CreateEmbed) -> Self {
         self.embed = embed;

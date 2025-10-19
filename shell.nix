@@ -7,5 +7,9 @@ with pkgs;
       rustup
       pkg-config
       openssl
+
+      # linters and formatters
+      markdownlint-cli
+      alejandra
     ];
   }
