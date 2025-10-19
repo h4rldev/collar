@@ -5,7 +5,10 @@ use super::{
     commands::{Ad, User},
     http::{ResponseTypes, make_request},
 };
-use poise::serenity_prelude::{self as serenity, ChannelId, CreateActionRow};
+use poise::{
+    CreateReply,
+    serenity_prelude::{self as serenity, ChannelId, CreateActionRow},
+};
 use reqwest::Method;
 use serenity::{
     ButtonStyle, Color, ComponentInteractionCollector, CreateButton, CreateEmbed,
@@ -28,6 +31,7 @@ async fn process_mci(
     user_id: u64,
     ctx: &CollarAppContext<'_>,
     shard: &serenity::Context,
+
     submit_type: SubmitType,
 ) -> Result<(), CollarError> {
     let user = ctx.http().get_user(user_id.into()).await?;
@@ -60,7 +64,9 @@ async fn process_mci(
     let dm_user_verify_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("You've been verified!!")
-        .description(format!("Hi there, {user_mention}, you've been verified :3"))
+        .description(format!(
+            "Hi there, {user_mention}, you've been verified !!! Welcome to petring !! :3"
+        ))
         .author(CreateEmbedAuthor::new(user.name.clone()))
         .color(Color::from_rgb(0, 255, 0));
 
@@ -319,7 +325,18 @@ impl Notif {
         let channel_ids = ctx.data().notif_channel_ids.lock().await;
         let general_channel_id = match channel_ids.general_id {
             Some(channel_id) => channel_id,
-            None => return Err("Failed to find general, was it ever saved?".into()),
+            None => {
+                let save_warning_embed = EmbedWrapper::new_application(ctx).0.title("No channel")
+                    .description("No channel was found for general notifications, please set one up using `/set_notification_channel`")
+                    .color(Color::from_rgb(255, 0, 0));
+
+                let reply = CreateReply::default()
+                    .ephemeral(true)
+                    .reply(true)
+                    .embed(save_warning_embed);
+                ctx.send(reply).await?;
+                return Ok(());
+            }
         };
 
         let channel_id: ChannelId = general_channel_id.into();
@@ -339,7 +356,18 @@ impl Notif {
         let channel_ids = ctx.data().notif_channel_ids.lock().await;
         let submit_channel_id = match channel_ids.submit_id {
             Some(channel_id) => channel_id,
-            None => return Err("Failed to find submit channel, was it ever saved?".into()),
+            None => {
+                let save_warning_embed = EmbedWrapper::new_application(ctx).0.title("No channel")
+                    .description("No channel was found for submit notifications, please set one up using `/set_notification_channel`")
+                    .color(Color::from_rgb(255, 0, 0));
+
+                let reply = CreateReply::default()
+                    .ephemeral(true)
+                    .reply(true)
+                    .embed(save_warning_embed);
+                ctx.send(reply).await?;
+                return Ok(());
+            }
         };
 
         let channel_id: ChannelId = submit_channel_id.into();
@@ -366,7 +394,18 @@ impl Notif {
         let channel_ids = ctx.data().notif_channel_ids.lock().await;
         let fallback_channel_id = match channel_ids.fallback_id {
             Some(channel_id) => channel_id,
-            None => return Err("Failed to find fallback, was it ever saved?".into()),
+            None => {
+                let save_warning_embed = EmbedWrapper::new_application(ctx).0.title("No channel")
+                    .description("No channel was found for failed dm notifications, please set one up using `/set_notification_channel`")
+                    .color(Color::from_rgb(255, 0, 0));
+
+                let reply = CreateReply::default()
+                    .ephemeral(true)
+                    .reply(true)
+                    .embed(save_warning_embed);
+                ctx.send(reply).await?;
+                return Ok(());
+            }
         };
 
         let channel_id: ChannelId = fallback_channel_id.into();

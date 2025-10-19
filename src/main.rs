@@ -1,6 +1,6 @@
 use collar::{
     Collar,
-    commands::{notifications, petads, petring},
+    commands::{misc, notifications, petads, petring},
 };
 use dotenvy::dotenv;
 use poise::{Framework, serenity_prelude as serenity};
@@ -47,6 +47,10 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
+                misc::ping(),
+                misc::help(),
+                misc::set_feedback_webhook(),
+                misc::feedback(),
                 petring::me(),
                 petring::get_user(),
                 petring::submit_user(),
@@ -55,6 +59,7 @@ async fn main() {
                 petring::remove_user(),
                 notifications::set_notif_channel(),
                 notifications::get_notif_channel(),
+                notifications::get_all_notif_channels(),
                 petads::submit_ad(),
                 petads::verify_ad(),
                 petads::remove_ad(),

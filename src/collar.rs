@@ -30,6 +30,7 @@ pub(crate) struct Secrets {
 pub(crate) struct Collar {
     secrets: Arc<Mutex<Secrets>>,
     notif_channel_ids: Arc<Mutex<NotifChannels>>,
+    feedback_webhook: Arc<Mutex<Option<String>>>,
     client: Client,
     api_base_url: String,
     bot_id: UserId,
@@ -92,8 +93,7 @@ impl Collar {
 
         let bot_id = std::env::var("BOT_ID").expect("missing BOT_ID");
 
-        let notif_channel_id_buf =
-            std::fs::read_to_string(".notif_channel_id.json").unwrap_or_default();
+        let notif_channel_id_buf = std::fs::read_to_string(".notif_channel_id").unwrap_or_default();
 
         let notif_channel_ids: NotifChannels = if notif_channel_id_buf.is_empty() {
             NotifChannels {
@@ -104,6 +104,15 @@ impl Collar {
             }
         } else {
             serde_json::from_str(&notif_channel_id_buf).unwrap()
+        };
+
+        let feedback_webhook_buf =
+            std::fs::read_to_string(".feedback_webhook.json").unwrap_or_default();
+
+        let feedback_webhook = if feedback_webhook_buf.is_empty() {
+            None
+        } else {
+            Some(feedback_webhook_buf)
         };
 
         let client_clone = client.clone();
@@ -148,6 +157,7 @@ impl Collar {
         Self {
             secrets: Arc::new(Mutex::new(secrets)),
             notif_channel_ids: Arc::new(Mutex::new(notif_channel_ids)),
+            feedback_webhook: Arc::new(Mutex::new(feedback_webhook)),
             client: client_clone,
             api_base_url: base_url_clone,
             bot_id: bot_id.parse::<UserId>().unwrap(),

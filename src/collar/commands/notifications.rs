@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use crate::collar::EmbedWrapper;
+
 use super::{COLLAR_FOOTER, CollarContext, CollarError, NotifChannelType};
 use poise::{CreateReply, command, serenity_prelude as serenity};
 use serenity::{Color, CreateEmbed, CreateEmbedFooter};
@@ -133,9 +135,9 @@ pub async fn set_notif_channel(
     slash_command,
     description_localized(
         locale = "en-US",
-        description = "Get the channel that notifications are sent to"
+        description = "Get a channel that notifications are sent to"
     ),
-    description_localized(locale = "sv-SE", description = "Hämta notifieringskanalen"),
+    description_localized(locale = "sv-SE", description = "Hämta notifieringskanal"),
     name_localized(locale = "en-US", name = "get_notification_channel"),
     name_localized(locale = "sv-SE", name = "hämta_notifieringskanal"),
     required_permissions = "MANAGE_CHANNELS | BAN_MEMBERS | KICK_MEMBERS | MUTE_MEMBERS",
@@ -201,5 +203,99 @@ pub async fn get_notif_channel(
 
     ctx.send(reply).await?;
 
+    Ok(())
+}
+
+#[command(
+    slash_command,
+    description_localized(
+        locale = "en-US",
+        description = "Get all channels that notifications are sent to"
+    ),
+    description_localized(locale = "sv-SE", description = "Hämta alla notifieringskanaler"),
+    name_localized(locale = "en-US", name = "get_all_notification_channels"),
+    name_localized(locale = "sv-SE", name = "hämta_alla_notifieringskanaler"),
+    required_permissions = "MANAGE_CHANNELS | BAN_MEMBERS | KICK_MEMBERS | MUTE_MEMBERS",
+    category = "Notifications"
+)]
+pub async fn get_all_notif_channels(ctx: CollarContext<'_>) -> Result<(), CollarError> {
+    let data = ctx.data();
+
+    let all_notif_channel_ids = data.notif_channel_ids.lock().await;
+    let all_notif_channel_ids = all_notif_channel_ids.clone();
+
+    let (is_submit, is_verify, is_general, is_fallback) = (
+        all_notif_channel_ids.submit_id.is_some(),
+        all_notif_channel_ids.verify_id.is_some(),
+        all_notif_channel_ids.general_id.is_some(),
+        all_notif_channel_ids.fallback_id.is_some(),
+    );
+
+    let submit = if is_submit {
+        match ctx
+            .http()
+            .get_channel(all_notif_channel_ids.submit_id.unwrap().into())
+            .await
+        {
+            Ok(channel) => channel.to_string(),
+            Err(_) => String::from("Submit: Invalid channel id, did a channel get deleted?"),
+        }
+    } else {
+        String::from("Unset! Set it using `/set_notification_channel`")
+    };
+
+    let verify = if is_verify {
+        match ctx
+            .http()
+            .get_channel(all_notif_channel_ids.verify_id.unwrap().into())
+            .await
+        {
+            Ok(channel) => channel.to_string(),
+            Err(_) => String::from("Invalid channel id, did a channel get deleted?"),
+        }
+    } else {
+        String::from("Unset! Set it using `/set_notification_channel`")
+    };
+
+    let general = if is_general {
+        match ctx
+            .http()
+            .get_channel(all_notif_channel_ids.general_id.unwrap().into())
+            .await
+        {
+            Ok(channel) => channel.to_string(),
+            Err(_) => String::from("Invalid channel id, did a channel get deleted?"),
+        }
+    } else {
+        String::from("Unset! Set it using `/set_notification_channel`")
+    };
+
+    let fallback = if is_fallback {
+        match ctx
+            .http()
+            .get_channel(all_notif_channel_ids.fallback_id.unwrap().into())
+            .await
+        {
+            Ok(channel) => channel.to_string(),
+            Err(_) => String::from("Invalid channel id, did a channel get deleted?"),
+        }
+    } else {
+        String::from("Unset! Set it using `/set_notification_channel`")
+    };
+
+    let embed = EmbedWrapper::new_normal(&ctx)
+        .0
+        .title("Notification channels")
+        .field("Submit", submit, true)
+        .field("Verify", verify, true)
+        .field("General", general, true)
+        .field("DM Fallback", fallback, true);
+
+    let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+
+    ctx.send(reply).await?;
     Ok(())
 }

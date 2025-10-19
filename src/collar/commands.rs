@@ -2,6 +2,7 @@ use super::{COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, http, n
 use poise::{ChoiceParameter, Modal};
 use serde::{Deserialize, Serialize};
 
+pub mod misc;
 pub mod notifications;
 pub mod petads;
 pub mod petring;
@@ -119,4 +120,65 @@ pub enum NotifChannelType {
     #[name = "Fallback"]
     #[name = "Incase User DM fails, send the message to this channel instead"]
     Fallback,
+}
+
+#[derive(ChoiceParameter)]
+pub enum FeedbackTopicType {
+    #[name = "PetRing"]
+    #[name = "Send Feedback or an issue regarding PetRing"]
+    PetRing,
+    #[name = "PetAds"]
+    #[name = "Send Feedback or an issue regarding PetAds"]
+    PetAds,
+    #[name = "Collar"]
+    #[name = "Send Feedback or an issue regarding Collar"]
+    Collar,
+}
+
+#[derive(Deserialize, Debug, Clone, Modal)]
+#[name = "Submit feedback or an issue :3"]
+pub struct FeedbackSubmission {
+    #[name = "Title"]
+    #[placeholder = "Title of your feedback/issue"]
+    #[min_length = 5]
+    pub title: String,
+
+    #[name = "Description"]
+    #[placeholder = "Description of your feedback/issue"]
+    #[min_length = 50]
+    #[paragraph]
+    pub description: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WebhookEmbedAuthor {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WebhookEmbedThumbnail {
+    url: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WebhookEmbedFooter {
+    text: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WebhookEmbed {
+    title: String,
+    description: String,
+    color: i64,
+    footer: WebhookEmbedFooter,
+    thumbnail: WebhookEmbedThumbnail,
+    author: WebhookEmbedAuthor,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WebhookPost {
+    username: String,
+    avatar_url: String,
+    tts: bool,
+    embeds: Vec<WebhookEmbed>,
 }

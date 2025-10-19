@@ -404,7 +404,7 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     slash_command,
     description_localized(
         locale = "en-US",
-        description = "Edit your petring account information, as a verified user"
+        description = "Edit your petring account information, even when unverified"
     ),
     description_localized(
         locale = "sv-SE",
@@ -462,10 +462,6 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
             if user_id_u64 != user.new.discord_id {
                 return Err("User not found".into());
-            }
-
-            if !user.new.verified {
-                return Err("User not verified".into());
             }
 
             let avatar_url = match ctx.http().get_user(user_id).await {
