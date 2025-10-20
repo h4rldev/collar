@@ -92,6 +92,8 @@ pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
 
             let user_url = format!("{base_url}/user/{}", user.username);
 
+            info!("User url: {}", user_url);
+
             let embed = serenity::CreateEmbed::default()
                 .title("Your information :3")
                 .author(

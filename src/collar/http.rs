@@ -194,7 +194,10 @@ where
             }
         }
     } else if resp.status() != 401 {
-        match resp.json::<ErrorResponse>().await {
+        let resp_text = resp.text().await?;
+        error!("Response_text: {resp_text}");
+
+        match serde_json::from_str::<ErrorResponse>(&resp_text) {
             Ok(error) => return Ok(ResponseTypes::Error(error)),
             Err(err) => {
                 error!("Failed to convert response to json: {err}");

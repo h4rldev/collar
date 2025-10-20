@@ -93,7 +93,8 @@ impl Collar {
 
         let bot_id = std::env::var("BOT_ID").expect("missing BOT_ID");
 
-        let notif_channel_id_buf = std::fs::read_to_string(".notif_channel_id").unwrap_or_default();
+        let notif_channel_id_buf =
+            std::fs::read_to_string(".notif_channel_id.json").unwrap_or_default();
 
         let notif_channel_ids: NotifChannels = if notif_channel_id_buf.is_empty() {
             NotifChannels {
