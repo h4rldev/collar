@@ -441,8 +441,8 @@ async fn verify_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), 
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
-        &format!("/api/put/user/verify/{}", discord_id),
-        Method::PUT,
+        &format!("/api/patch/user/verify/{}", discord_id),
+        Method::PATCH,
     )
     .await?;
 
@@ -462,8 +462,8 @@ async fn verify_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), Co
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
-        &format!("/api/put/ad/verify/{}", discord_id),
-        Method::PUT,
+        &format!("/api/patch/ad/verify/{}", discord_id),
+        Method::PATCH,
     )
     .await?;
 
