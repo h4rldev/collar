@@ -52,22 +52,9 @@ pub(crate) async fn get_secrets(client: Client, base_url: String) -> Result<Secr
     }
 
     if !status.is_success() {
-        let mut file_to_read = match std::fs::File::open(".secrets.json") {
-            Ok(file) => file,
-            Err(_) => {
-                error!("Failed to get secrets: {status:?}");
-                return Err(CollarError::from("Failed to get secrets"));
-            }
-        };
+        let mut file_to_read = std::fs::File::open(".secrets.json")?;
         let mut secrets_str = String::new();
-        match file_to_read.read_to_string(&mut secrets_str) {
-            Ok(_) => (),
-            Err(err) => {
-                error!("Failed to read secrets file: {err}");
-                return Err(CollarError::from("Failed to get secrets from file"));
-            }
-        };
-
+        file_to_read.read_to_string(&mut secrets_str)?;
         response = secrets_str;
     }
 
@@ -117,26 +104,70 @@ pub(crate) async fn refresh_secrets(
         }
     }
 
-    if !status.is_success() {
-        let error: ErrorResponse = serde_json::from_str(&response).unwrap();
-        error!("Failed to refresh secrets: {error:?}");
-        return Err(CollarError::from(format!(
-            "Failed to refresh secrets: {} - {}",
-            error.status, error.message
-        )));
+    if status.is_success() {
+        let secrets: Secrets = serde_json::from_str(&response).unwrap();
+
+        info!("Refreshed secrets");
+
+        let mut file_to_write = std::fs::File::create(".secrets.json")?;
+        let secrets_str = serde_json::to_string(&secrets)?;
+        file_to_write.write_all(secrets_str.as_bytes())?;
+
+        return Ok(secrets);
     }
 
-    info!("Got response");
+    response = String::new();
+    status = StatusCode::IM_A_TEAPOT;
 
-    let secrets: Secrets = serde_json::from_str(&response).unwrap();
+    let mut cached_secrets_buf = String::new();
+    let mut cached_secrets_file = match std::fs::File::open(".secrets.json") {
+        Ok(file) => file,
+        Err(err) => {
+            return Err(CollarError::from(format!(
+                "No cached secrets to use for refresh: {err}"
+            )));
+        }
+    };
 
-    info!("Refreshed secrets");
+    cached_secrets_file.read_to_string(&mut cached_secrets_buf)?;
 
-    let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
-    let secrets_str = serde_json::to_string(&secrets).unwrap();
-    file_to_write.write_all(secrets_str.as_bytes()).unwrap();
+    let cached_secrets: Secrets = serde_json::from_str(&cached_secrets_buf)?;
+    let new_body = RefreshTokenRequest {
+        access_token: cached_secrets.access_token,
+        refresh_token: cached_secrets.refresh_token,
+    };
 
-    Ok(secrets)
+    while response.is_empty() && status == StatusCode::IM_A_TEAPOT {
+        let url = format!("{base_url}/bot/refresh");
+        let resp = client.post(url).json(&new_body);
+        match resp.send().await {
+            Ok(resp) => {
+                status = resp.status();
+                response = resp.text().await?;
+                break;
+            }
+            Err(_) => {
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        }
+    }
+
+    if status.is_success() {
+        let secrets: Secrets = serde_json::from_str(&response).unwrap();
+
+        info!("Refreshed secrets");
+
+        let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
+        let secrets_str = serde_json::to_string(&secrets).unwrap();
+        file_to_write.write_all(secrets_str.as_bytes()).unwrap();
+
+        return Ok(secrets);
+    }
+
+    Err(CollarError::from(format!(
+        "Failed to refresh secrets: {response}"
+    )))
 }
 
 #[derive(Deserialize, Debug)]
