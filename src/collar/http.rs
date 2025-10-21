@@ -168,6 +168,18 @@ where
     info!("Making request to {url}");
 
     let mut headers = reqwest::header::HeaderMap::new();
+
+    if body.is_some() && method != Method::GET {
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            reqwest::header::HeaderValue::from_str("application/json")?,
+        );
+    }
+
+    headers.insert(
+        reqwest::header::ACCEPT,
+        reqwest::header::HeaderValue::from_str("application/json")?,
+    );
     headers.insert(
         reqwest::header::AUTHORIZATION,
         reqwest::header::HeaderValue::from_str(&format!("Bearer {}", &secrets.access_token))?,
@@ -177,13 +189,16 @@ where
         .request(method.clone(), url.clone())
         .headers(headers.clone());
 
-    if let Some(body) = body {
+    if let Some(body) = body.clone() {
         req = req.json(&body);
     }
 
     let resp = req.send().await?;
     if resp.status().is_success() {
-        match resp.json::<R>().await {
+        let resp_text = resp.text().await?;
+        debug!("Response_text: {resp_text}");
+
+        match serde_json::from_str::<R>(&resp_text) {
             Ok(return_type) => return Ok(ResponseTypes::Success(return_type)),
             Err(err) => {
                 error!("Failed to convert response to json: {err}");
@@ -221,6 +236,18 @@ where
         *secrets = new_secrets;
 
         headers = reqwest::header::HeaderMap::new();
+
+        if body.is_some() && method != Method::GET {
+            headers.insert(
+                reqwest::header::CONTENT_TYPE,
+                reqwest::header::HeaderValue::from_str("application/json")?,
+            );
+        }
+
+        headers.insert(
+            reqwest::header::ACCEPT,
+            reqwest::header::HeaderValue::from_str("application/json")?,
+        );
         headers.insert(
             reqwest::header::AUTHORIZATION,
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", &secrets.access_token))?,
@@ -231,7 +258,10 @@ where
     let resp = new_req.send().await?;
 
     if !resp.status().is_success() {
-        match resp.json::<ErrorResponse>().await {
+        let resp_text = resp.text().await?;
+        error!("Response_text: {resp_text}");
+
+        match serde_json::from_str::<ErrorResponse>(&resp_text) {
             Ok(error) => return Ok(ResponseTypes::Error(error)),
             Err(err) => {
                 error!("Failed to convert response to json: {err}");
