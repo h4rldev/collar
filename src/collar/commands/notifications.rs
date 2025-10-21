@@ -1,10 +1,7 @@
-use std::io::Write;
-
-use crate::collar::EmbedWrapper;
-
-use super::{COLLAR_FOOTER, CollarContext, CollarError, NotifChannelType};
+use super::{CollarContext, CollarError, EmbedWrapper, NotifChannelType};
 use poise::{CreateReply, command, serenity_prelude as serenity};
-use serenity::{Color, CreateEmbed, CreateEmbedFooter};
+use serenity::Color;
+use std::io::Write;
 use tracing::{error, info};
 
 #[command(
@@ -29,16 +26,12 @@ pub async fn set_notif_channel(
 ) -> Result<(), CollarError> {
     let data = ctx.data();
 
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
-
     match channel.clone().guild() {
         Some(_) => {}
         None => {
-            let embed = CreateEmbed::default()
+            let embed = EmbedWrapper::new_normal(&ctx)
                 .title("You can't set a notification channel in a DM :3")
                 .description("You need to be in a server to set a notification channel :3")
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(255, 0, 0));
             let reply = CreateReply::default().embed(embed).reply(true);
             ctx.send(reply).await?;
@@ -112,13 +105,12 @@ pub async fn set_notif_channel(
         NotifChannelType::Fallback => "when the bot fails to dm a user",
     };
 
-    let embed = CreateEmbed::default()
+    let embed = EmbedWrapper::new_normal(&ctx)
         .title(format!("{} Notification channel set!", channel_type_str))
         .description(format!(
             "Expect a notification {} in {}",
             channel_type_desc, channel
         ))
-        .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
         .color(Color::from_rgb(0, 255, 0));
 
     let reply = CreateReply::default()
@@ -148,8 +140,6 @@ pub async fn get_notif_channel(
     channel_type: NotifChannelType,
 ) -> Result<(), CollarError> {
     let data = ctx.data();
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
     let channel_id = data.notif_channel_ids.lock().await;
     let channel_id = match channel_type {
@@ -188,12 +178,11 @@ pub async fn get_notif_channel(
         NotifChannelType::Fallback => "when the bot fails to dm a user",
     };
 
-    let embed = serenity::CreateEmbed::default()
+    let embed = EmbedWrapper::new_normal(&ctx)
         .title(format!(
             "Here's the {channel_type_str} Notification channel"
         ))
         .description(format!("The channel for {channel_type_desc} is {channel}"))
-        .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
         .color(serenity::Color::from_rgb(0, 0, 255));
 
     let reply = CreateReply::default()
@@ -284,7 +273,6 @@ pub async fn get_all_notif_channels(ctx: CollarContext<'_>) -> Result<(), Collar
     };
 
     let embed = EmbedWrapper::new_normal(&ctx)
-        .0
         .title("Notification channels")
         .field("Submit", submit, true)
         .field("Verify", verify, true)

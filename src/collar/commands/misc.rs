@@ -1,19 +1,14 @@
-use std::io::Write;
-
-use crate::collar::{
-    COLLAR_FOOTER, CollarAppContext, EmbedWrapper,
-    commands::{
-        FeedbackSubmission, FeedbackTopicType, WebhookEmbed, WebhookEmbedAuthor,
-        WebhookEmbedFooter, WebhookEmbedThumbnail, WebhookPost,
-    },
+use super::{
+    COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, EmbedWrapper, FeedbackSubmission,
+    FeedbackTopicType, WebhookEmbed, WebhookEmbedAuthor, WebhookEmbedFooter, WebhookEmbedThumbnail,
+    WebhookPost,
 };
-
-use super::{CollarContext, CollarError};
 use poise::{
     CreateReply, Modal, command, samples::HelpConfiguration, serenity_prelude as serenity,
 };
 use reqwest::Method;
 use serenity::Color;
+use std::io::Write;
 use tokio::time::Instant;
 
 async fn measure_api_latency(ctx: CollarContext<'_>) -> Result<(u128, u128), reqwest::Error> {
@@ -44,7 +39,6 @@ pub async fn ping(ctx: CollarContext<'_>) -> Result<(), CollarError> {
     let petring_ping = measure_api_latency(ctx).await?;
 
     let embed = EmbedWrapper::new_normal(&ctx)
-        .0
         .title("Pong!")
         .field(
             "Gateway Heartbeat Latency",
@@ -108,7 +102,6 @@ pub async fn set_feedback_webhook(
     }
 
     let embed = EmbedWrapper::new_application(&ctx)
-        .0
         .title("Feedback webhook set!")
         .description(format!("Feedback will now be sent to {}", webhook))
         .color(Color::from_rgb(0, 255, 0));
@@ -133,7 +126,6 @@ pub async fn feedback(
         Some(webhook) => webhook,
         None => {
             let no_webhook_embed = EmbedWrapper::new_application(&ctx)
-                .0
                 .title("No webhook set 3':")
                 .description("No webhook was set :C")
                 .color(Color::from_rgb(255, 0, 0));
@@ -152,7 +144,6 @@ pub async fn feedback(
         Some(modal_data) => modal_data,
         None => {
             let no_data_embed = EmbedWrapper::new_application(&ctx)
-                .0
                 .title("No data submitted 3':")
                 .description("No data was submitted :C")
                 .color(Color::from_rgb(255, 0, 0));
@@ -212,7 +203,6 @@ pub async fn feedback(
 
     if response.status().is_success() {
         let embed = EmbedWrapper::new_application(&ctx)
-            .0
             .title("Feedback sent!")
             .description("Your feedback was sent successfully :3")
             .color(Color::from_rgb(0, 255, 0));
@@ -227,7 +217,6 @@ pub async fn feedback(
         let error = response.text().await?;
 
         let embed = EmbedWrapper::new_application(&ctx)
-            .0
             .title("Failed to send feedback 3:")
             .description(format!("Error message: {error}"))
             .color(Color::from_rgb(255, 0, 0));

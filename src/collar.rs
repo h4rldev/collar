@@ -44,9 +44,9 @@ struct NotifChannels {
     general_id: Option<u64>,
 }
 
-struct EmbedWrapper(CreateEmbed);
+struct EmbedWrapper;
 impl EmbedWrapper {
-    fn new_normal(ctx: &CollarContext<'_>) -> Self {
+    fn new_normal(ctx: &CollarContext<'_>) -> CreateEmbed {
         let bot_pfp = ctx
             .cache()
             .user(ctx.data().bot_id)
@@ -55,12 +55,10 @@ impl EmbedWrapper {
             .unwrap(); // if
         // this fails to unwrap, i'll buy myself a beer
 
-        EmbedWrapper(
-            CreateEmbed::default().footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp)),
-        )
+        CreateEmbed::default().footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
     }
 
-    fn new_application(ctx: &CollarAppContext<'_>) -> Self {
+    fn new_application(ctx: &CollarAppContext<'_>) -> CreateEmbed {
         let bot_pfp = ctx
             .cache()
             .user(ctx.data().bot_id)
@@ -69,9 +67,7 @@ impl EmbedWrapper {
             .unwrap(); // if
         // this fails to unwrap, i'll buy myself a beer
 
-        EmbedWrapper(
-            CreateEmbed::default().footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp)),
-        )
+        CreateEmbed::default().footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
     }
 }
 

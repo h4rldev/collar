@@ -1,8 +1,8 @@
 use crate::collar::EmbedWrapper;
 
 use super::{
-    AddWebsite, COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, EditSubmission,
-    EditedUser, User, UserEditSubmission, UserSubmission,
+    AddWebsite, CollarAppContext, CollarContext, CollarError, EditSubmission, EditedUser, User,
+    UserEditSubmission, UserSubmission,
     http::{ErrorResponse, ResponseTypes, make_request},
     notifs::{Notif, SubmitType},
 };
@@ -10,8 +10,7 @@ use chrono::DateTime;
 use poise::{CreateReply, Modal, command, serenity_prelude as serenity};
 use reqwest::Method;
 use serenity::{
-    Color, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, FormattedTimestamp,
-    FormattedTimestampStyle, Mentionable, Timestamp,
+    Color, CreateEmbedAuthor, FormattedTimestamp, FormattedTimestampStyle, Mentionable, Timestamp,
 };
 use tracing::info;
 
@@ -33,9 +32,6 @@ pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
     let data = ctx.data();
     let user_id = ctx.author().id;
     let base_url = data.api_base_url.clone();
-
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
     let response = make_request(
         data.clone(),
@@ -94,7 +90,7 @@ pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
 
             info!("User url: {}", user_url);
 
-            let embed = serenity::CreateEmbed::default()
+            let embed = EmbedWrapper::new_normal(&ctx)
                 .title("Your information :3")
                 .author(
                     CreateEmbedAuthor::new(format!("{} (press here to visit)", user.username))
@@ -105,19 +101,19 @@ pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
                 .field("Created at", formatted_created_at_timestamp, false)
                 .field("Edited at", formatted_edited_at_timestamp, false)
                 .field("Verified at", formatted_verified_at_timestamp, false)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
-                .color(serenity::Color::from_rgb(0, 0, 255));
+                .color(Color::from_rgb(0, 0, 255));
 
             let reply = CreateReply::default().embed(embed).reply(true);
             ctx.send(reply).await?;
         }
-        ResponseTypes::Error(error) => {
-            let error: ErrorResponse = error;
-            let embed = serenity::CreateEmbed::default()
+        ResponseTypes::Error(_error) => {
+            let error: ErrorResponse = _error;
+
+            let embed = EmbedWrapper::new_normal(&ctx)
                 .title(format!("Error {}", error.status))
                 .description(error.message)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
@@ -147,9 +143,6 @@ pub async fn get_user(ctx: CollarContext<'_>, user: serenity::User) -> Result<()
     let data = ctx.data();
     let user_id = user.id;
     let base_url = data.api_base_url.clone();
-
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
     let response = make_request(
         data.clone(),
@@ -200,7 +193,7 @@ pub async fn get_user(ctx: CollarContext<'_>, user: serenity::User) -> Result<()
                 .to_string();
             }
 
-            let embed = CreateEmbed::default()
+            let embed = EmbedWrapper::new_normal(&ctx)
                 .title(format!("Info for {} :3c", user.username))
                 .author(
                     CreateEmbedAuthor::new(format!("{} (press here to visit)", user.username))
@@ -211,28 +204,24 @@ pub async fn get_user(ctx: CollarContext<'_>, user: serenity::User) -> Result<()
                 .field("Created", formatted_created_at_timestamp, false)
                 .field("Edited", formatted_edited_at_timestamp, false)
                 .field("Verified", formatted_verified_at_timestamp, false)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 0, 255));
 
             let reply = CreateReply::default().embed(embed).reply(true);
             ctx.send(reply).await?;
         }
-        ResponseTypes::Error(error) => {
-            let error: ErrorResponse = error;
-            let embed = CreateEmbed::default()
+        ResponseTypes::Error(_error) => {
+            let error: ErrorResponse = _error;
+
+            let embed = EmbedWrapper::new_normal(&ctx)
                 .title(format!("Error {}", error.status))
                 .description(error.message)
-                .footer(
-                    CreateEmbedFooter::new(
-                        "Collar :3, a Discord bot helper for petring and petads :3",
-                    )
-                    .icon_url(bot_pfp),
-                )
                 .color(Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
         }
     }
@@ -249,9 +238,6 @@ pub async fn get_user(ctx: CollarContext<'_>, user: serenity::User) -> Result<()
     category = "PetRing"
 )]
 pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
-
     let user_id = ctx.author().id;
 
     let guild_id = match ctx.guild_id() {
@@ -263,16 +249,16 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     let modal_data = match modal_data {
         Some(modal_data) => modal_data,
         None => {
-            let embed = CreateEmbed::default()
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title("You didn't submit anything")
                 .description("No data was submitted 3:")
-                .color(Color::from_rgb(255, 0, 0))
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp));
+                .color(Color::from_rgb(255, 0, 0));
 
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
             return Ok(());
         }
@@ -339,7 +325,7 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             )
             .to_string();
 
-            let embed = CreateEmbed::default()
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title("Your submission was successful! :3")
                 .author(CreateEmbedAuthor::new(user.username))
                 .thumbnail(avatar_url)
@@ -350,11 +336,9 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                     false,
                 )
                 .field("Created", formatted_created_at_timestamp.clone(), false)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 0, 255));
 
             let mut submission_embed = EmbedWrapper::new_application(&ctx)
-                .0
                 .title("New submission :3")
                 .author(CreateEmbedAuthor::new(format!(
                     "from: {}",
@@ -384,17 +368,18 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             notif = notif.set_embed(submission_embed);
             notif.submit(&ctx, user_id.get(), SubmitType::User).await?;
         }
-        ResponseTypes::Error(error) => {
-            let error: ErrorResponse = error;
-            let embed = CreateEmbed::default()
+        ResponseTypes::Error(_error) => {
+            let error: ErrorResponse = _error;
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title(format!("Error {}", error.status))
                 .description(error.message)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
         }
     }
@@ -417,23 +402,20 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
     category = "PetRing"
 )]
 pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
-
     let modal_data = EditSubmission::execute(ctx).await?;
     let modal_data = match modal_data {
         Some(modal_data) => modal_data,
         None => {
-            let embed = CreateEmbed::default()
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title("You didn't edit anything")
                 .description("No data was submitted 3:")
-                .color(Color::from_rgb(255, 0, 0))
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp));
+                .color(Color::from_rgb(255, 0, 0));
 
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
             return Ok(());
         }
@@ -507,17 +489,15 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
             let user_url = format!("{base_url}/user/{}", user.new.username);
 
-            let mut embed = serenity::CreateEmbed::default()
+            let mut embed = EmbedWrapper::new_application(&ctx)
                 .title("Your edit was successful! :3")
                 .thumbnail(avatar_url.clone())
                 .field("Created", &formatted_created_at_timestamp, false)
                 .field("Verified", &formatted_verified_at_timestamp, false)
                 .field("Edited", &formatted_edited_at_timestamp, false)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(0, 255, 0));
 
             let mut user_edit_notif_embed = EmbedWrapper::new_application(&ctx)
-                .0
                 .title("User edited :3")
                 .thumbnail(avatar_url)
                 .field("Created", &formatted_created_at_timestamp, false)
@@ -579,17 +559,18 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             notif = notif.set_embed(user_edit_notif_embed);
             notif.general(&ctx).await?;
         }
-        ResponseTypes::Error(error) => {
-            let error: ErrorResponse = error;
-            let embed = CreateEmbed::default()
+        ResponseTypes::Error(_error) => {
+            let error: ErrorResponse = _error;
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title(format!("Error {}", error.status))
                 .description(error.message)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
         }
     }
@@ -618,9 +599,6 @@ pub async fn verify_user(
 
     let user_name = user.clone().name;
     let user_mention = user.mention();
-
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
     let response = make_request(ctx.data().clone(), None::<String>, &url, Method::PATCH).await?;
     match response {
@@ -653,18 +631,16 @@ pub async fn verify_user(
             ))
             .to_string();
 
-            let embed = serenity::CreateEmbed::default()
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title("Your verification was successful")
                 .author(CreateEmbedAuthor::new(format!("for: {}", user.username)))
                 .url(user.url.clone())
                 .thumbnail(avatar_url)
                 .field("Created", created_at_timestamp, false)
                 .field("Verified", verified_at_timestamp, false)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp.clone()))
                 .color(Color::from_rgb(0, 255, 0));
 
             let dm_user_verify_embed = EmbedWrapper::new_application(&ctx)
-                .0
                 .title("You've been verified!!")
                 .description(format!("Hi there, {user_mention}, you've been verified :3"))
                 .author(CreateEmbedAuthor::new(user_name))
@@ -674,23 +650,27 @@ pub async fn verify_user(
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
+
             info!("Sending user notif dm");
             let mut notif = Notif::new(&ctx);
             notif = notif.set_embed(dm_user_verify_embed);
             notif.dm_notif(&ctx, user_id.get()).await?;
         }
-        ResponseTypes::Error(error) => {
-            let error: ErrorResponse = error;
-            let embed = serenity::CreateEmbed::default()
+        ResponseTypes::Error(_error) => {
+            let error: ErrorResponse = _error;
+
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title(format!("Error {}", error.status))
                 .description(error.message)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
                 .color(Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default()
                 .embed(embed)
                 .reply(true)
                 .ephemeral(true);
+
             ctx.send(reply).await?;
         }
     }
@@ -720,9 +700,6 @@ pub async fn remove_user(
     let user_id = user.id;
     let url = format!("/api/delete/user/by-discord/{}", user_id);
 
-    let bot_id = ctx.data().bot_id;
-    let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
-
     let response = make_request(ctx.data().clone(), None::<String>, &url, Method::DELETE).await?;
     match response {
         ResponseTypes::Success(response) => {
@@ -731,24 +708,22 @@ pub async fn remove_user(
             let user_mention = ctx.http().get_user(user_id).await?.mention();
             let user_pfp = ctx.http().get_user(user_id).await?.avatar_url().unwrap();
 
-            let embed = serenity::CreateEmbed::default()
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title("Successfully removed user :3")
                 .description(format!(
                     "{user_mention} ({}): removed :3",
                     deleted_user.discord_id
                 ))
                 .thumbnail(user_pfp)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
-                .color(serenity::Color::from_rgb(255, 0, 0));
+                .color(Color::from_rgb(255, 0, 0));
 
             let user_delete_notif_embed = EmbedWrapper::new_application(&ctx)
-                .0
                 .title("User deleted 3:")
                 .description(format!(
                     "{user_mention}, also known as {} got their spot deleted in the petring 3':",
                     deleted_user.username
                 ))
-                .color(serenity::Color::from_rgb(255, 0, 0));
+                .color(Color::from_rgb(255, 0, 0));
 
             let reply = CreateReply::default()
                 .embed(embed)
@@ -760,13 +735,14 @@ pub async fn remove_user(
             notif = notif.set_embed(user_delete_notif_embed);
             notif.general(&ctx).await?;
         }
-        ResponseTypes::Error(error) => {
-            let error: ErrorResponse = error;
-            let embed = serenity::CreateEmbed::default()
+        ResponseTypes::Error(_error) => {
+            let error: ErrorResponse = _error;
+
+            let embed = EmbedWrapper::new_application(&ctx)
                 .title(format!("Error {}", error.status))
                 .description(error.message)
-                .footer(CreateEmbedFooter::new(COLLAR_FOOTER).icon_url(bot_pfp))
-                .color(serenity::Color::from_rgb(255, 0, 0));
+                .color(Color::from_rgb(255, 0, 0));
+
             let reply = CreateReply::default().embed(embed).reply(true);
             ctx.send(reply).await?;
         }

@@ -42,35 +42,30 @@ async fn process_mci(
     };
 
     let success_ad_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Verified :3")
         .description(format!("Verified ad for: {}", user_mention))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(0, 255, 0));
 
     let success_user_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Verified :3")
         .description(format!("Verified user: {}", user_mention))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(0, 255, 0));
 
     let error_ad_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Failed to verify 3:")
         .description(format!("Failed to verify ad for: {}", user_mention))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let error_user_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Failed to verify 3:")
         .description(format!("Failed to verify user: {}", user_mention))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let dm_user_verify_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("You've been verified!!")
         .description(format!(
             "Hi there, {user_mention}, you've been verified !!! Welcome to petring !! :3"
@@ -80,7 +75,6 @@ async fn process_mci(
         .color(Color::from_rgb(0, 255, 0));
 
     let dm_ad_verify_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Your ad was verified!!")
         .description(format!(
             "Hi, there, {user_mention}, your ad has been verified :3"
@@ -90,14 +84,12 @@ async fn process_mci(
         .color(Color::from_rgb(0, 255, 0));
 
     let dm_reject_user_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("You were rejected 3:")
         .description("Please discuss with staff about your rejection")
         .author(CreateEmbedAuthor::new(user.name.clone()))
         .color(Color::from_rgb(255, 0, 0));
 
     let dm_reject_ad_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Your ad was rejected 3:")
         .description("Please discuss with staff about your rejection")
         .author(CreateEmbedAuthor::new(user.name))
@@ -105,28 +97,24 @@ async fn process_mci(
         .color(Color::from_rgb(255, 0, 0));
 
     let reject_ad_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Rejected ad :3")
         .description(format!("Rejected ad for: {user_mention}"))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let reject_user_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Rejected user :3")
         .description(format!("Rejected user: {user_mention}"))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let error_reject_user_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Failed to reject user 3:")
         .description(format!("Failed to reject user: {user_mention}"))
         .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let error_reject_ad_embed = EmbedWrapper::new_application(ctx)
-        .0
         .title("Failed to reject ad 3:")
         .description(format!("Failed to reject ad for: {user_mention}"))
         .thumbnail(&user_pfp)
@@ -348,7 +336,7 @@ impl Notif {
         let general_channel_id = match channel_ids.general_id {
             Some(channel_id) => channel_id,
             None => {
-                let save_warning_embed = EmbedWrapper::new_application(ctx).0.title("No channel")
+                let save_warning_embed = EmbedWrapper::new_application(ctx).title("No channel")
                     .description("No channel was found for general notifications, please set one up using `/set_notification_channel`")
                     .color(Color::from_rgb(255, 0, 0));
 
@@ -379,7 +367,8 @@ impl Notif {
         let submit_channel_id = match channel_ids.submit_id {
             Some(channel_id) => channel_id,
             None => {
-                let save_warning_embed = EmbedWrapper::new_application(ctx).0.title("No channel")
+                let save_warning_embed = EmbedWrapper::new_application(ctx)
+                    .title("No channel")
                     .description("No channel was found for submit notifications, please set one up using `/set_notification_channel`")
                     .color(Color::from_rgb(255, 0, 0));
 
@@ -417,7 +406,8 @@ impl Notif {
         let fallback_channel_id = match channel_ids.fallback_id {
             Some(channel_id) => channel_id,
             None => {
-                let save_warning_embed = EmbedWrapper::new_application(ctx).0.title("No channel")
+                let save_warning_embed = EmbedWrapper::new_application(ctx)
+                    .title("No channel")
                     .description("No channel was found for failed dm notifications, please set one up using `/set_notification_channel`")
                     .color(Color::from_rgb(255, 0, 0));
 
@@ -431,7 +421,6 @@ impl Notif {
         };
 
         let channel_id: ChannelId = fallback_channel_id.into();
-
         let message = CreateMessage::new().embed(self.embed);
 
         channel_id.send_message(&ctx.http(), message).await?;
@@ -443,9 +432,7 @@ impl Notif {
         user_id: u64,
     ) -> Result<(), CollarError> {
         let discord_user = ctx.http().get_user(user_id.into()).await?;
-
         let message = CreateMessage::new().embed(self.embed.clone());
-
         match discord_user.direct_message(&ctx.http(), message).await {
             Ok(_) => {
                 info!(

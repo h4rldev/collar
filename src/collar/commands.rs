@@ -1,4 +1,6 @@
-use super::{COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, http, notifs};
+use super::{
+    COLLAR_FOOTER, CollarAppContext, CollarContext, CollarError, EmbedWrapper, http, notifs,
+};
 use poise::{ChoiceParameter, Modal};
 use serde::{Deserialize, Serialize};
 
