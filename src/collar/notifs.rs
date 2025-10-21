@@ -31,34 +31,42 @@ async fn process_mci(
     user_id: u64,
     ctx: &CollarAppContext<'_>,
     shard: &serenity::Context,
-
     submit_type: SubmitType,
 ) -> Result<(), CollarError> {
     let user = ctx.http().get_user(user_id.into()).await?;
     let user_mention = user.mention();
+    let user_pfp = if let Some(pfp) = user.avatar_url() {
+        pfp
+    } else {
+        String::from("https://i.imgur.com/h6SPOB3.jpeg")
+    };
 
     let success_ad_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Verified :3")
         .description(format!("Verified ad for: {}", user_mention))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(0, 255, 0));
 
     let success_user_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Verified :3")
         .description(format!("Verified user: {}", user_mention))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(0, 255, 0));
 
     let error_ad_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Failed to verify 3:")
         .description(format!("Failed to verify ad for: {}", user_mention))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let error_user_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Failed to verify 3:")
         .description(format!("Failed to verify user: {}", user_mention))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let dm_user_verify_embed = EmbedWrapper::new_application(ctx)
@@ -67,6 +75,7 @@ async fn process_mci(
         .description(format!(
             "Hi there, {user_mention}, you've been verified !!! Welcome to petring !! :3"
         ))
+        .thumbnail(&user_pfp)
         .author(CreateEmbedAuthor::new(user.name.clone()))
         .color(Color::from_rgb(0, 255, 0));
 
@@ -76,6 +85,7 @@ async fn process_mci(
         .description(format!(
             "Hi, there, {user_mention}, your ad has been verified :3"
         ))
+        .thumbnail(&user_pfp)
         .author(CreateEmbedAuthor::new(user.name.clone()))
         .color(Color::from_rgb(0, 255, 0));
 
@@ -91,30 +101,35 @@ async fn process_mci(
         .title("Your ad was rejected 3:")
         .description("Please discuss with staff about your rejection")
         .author(CreateEmbedAuthor::new(user.name))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let reject_ad_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Rejected ad :3")
         .description(format!("Rejected ad for: {user_mention}"))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let reject_user_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Rejected user :3")
         .description(format!("Rejected user: {user_mention}"))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let error_reject_user_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Failed to reject user 3:")
         .description(format!("Failed to reject user: {user_mention}"))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let error_reject_ad_embed = EmbedWrapper::new_application(ctx)
         .0
         .title("Failed to reject ad 3:")
         .description(format!("Failed to reject ad for: {user_mention}"))
+        .thumbnail(&user_pfp)
         .color(Color::from_rgb(255, 0, 0));
 
     let mut notif = Notif::new(ctx);
@@ -128,8 +143,10 @@ async fn process_mci(
                 info!("Verifying submission");
                 match submit_type {
                     SubmitType::Ad => match verify_ad(ctx, user_id).await {
-                        Ok(_) => {
+                        Ok(ad) => {
                             info!("Sending ephermeral embed for successful ad verification");
+                            let success_ad_embed = success_ad_embed.image(&ad.image_url);
+
                             mci.create_response(
                                 &ctx.http(),
                                 CreateInteractionResponse::Message(
@@ -143,6 +160,8 @@ async fn process_mci(
                             channel_id
                                 .delete_message(&ctx.http(), mci.message.id)
                                 .await?;
+
+                            let dm_ad_verify_embed = dm_ad_verify_embed.image(&ad.image_url);
                             notif = notif.set_embed(dm_ad_verify_embed);
                             notif.dm_notif(ctx, user_id).await?;
                             break;
@@ -209,8 +228,10 @@ async fn process_mci(
                 info!("Rejecting submission");
                 match submit_type {
                     SubmitType::Ad => match reject_ad(ctx, user_id).await {
-                        Ok(_) => {
+                        Ok(ad) => {
                             info!("Sending ephermeral embed for successful ad rejection");
+                            let reject_ad_embed = reject_ad_embed.image(&ad.image_url);
+
                             mci.create_response(
                                 &ctx.http(),
                                 CreateInteractionResponse::Message(
@@ -221,6 +242,7 @@ async fn process_mci(
                             )
                             .await?;
 
+                            let dm_reject_ad_embed = dm_reject_ad_embed.image(&ad.image_url);
                             channel_id
                                 .delete_message(&ctx.http(), mci.message.id)
                                 .await?;
@@ -437,7 +459,7 @@ impl Notif {
     }
 }
 
-async fn verify_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), CollarError> {
+async fn verify_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<User, CollarError> {
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
@@ -448,8 +470,8 @@ async fn verify_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), 
 
     match response {
         ResponseTypes::Success(_user) => {
-            let _user: User = _user;
-            Ok(())
+            let user: User = _user;
+            Ok(user)
         }
         ResponseTypes::Error(error) => {
             error!("Failed to get user: {error:?}");
@@ -458,7 +480,7 @@ async fn verify_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), 
     }
 }
 
-async fn verify_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), CollarError> {
+async fn verify_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<Ad, CollarError> {
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
@@ -468,9 +490,9 @@ async fn verify_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<(), Co
     .await?;
 
     match response {
-        ResponseTypes::Success(_user) => {
-            let _user: User = _user;
-            Ok(())
+        ResponseTypes::Success(_ad) => {
+            let ad: Ad = _ad;
+            Ok(ad)
         }
         ResponseTypes::Error(error) => {
             error!("Failed to get user: {error:?}");
@@ -489,9 +511,9 @@ async fn reject_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<Ad, Co
     .await?;
 
     match response {
-        ResponseTypes::Success(_user) => {
-            let _response: Ad = _user;
-            Ok(_response)
+        ResponseTypes::Success(_ad) => {
+            let ad: Ad = _ad;
+            Ok(ad)
         }
         ResponseTypes::Error(error) => {
             error!("Failed to get user: {error:?}");
@@ -511,8 +533,8 @@ async fn reject_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<User
 
     match response {
         ResponseTypes::Success(_user) => {
-            let _response: User = _user;
-            Ok(_response)
+            let user: User = _user;
+            Ok(user)
         }
         ResponseTypes::Error(error) => {
             error!("Failed to get user: {error:?}");
