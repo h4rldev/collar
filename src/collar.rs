@@ -114,15 +114,17 @@ impl Collar {
 
         let client_clone = client.clone();
         let base_url_clone = base_url.clone();
-        let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
-            Ok(secrets) => secrets,
-            Err(e) => panic!("Failed to get secrets: {:?}", e),
-        };
 
         let mut interval = interval_at(
             Instant::now() + Duration::from_secs(30 * 60),
             Duration::from_secs(30 * 60),
         );
+
+        let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
+            Ok(secrets) => secrets,
+            Err(e) => panic!("Failed to get secrets: {:?}", e),
+        };
+
         tokio::spawn(async move {
             let client = match http::make_reqwest_client().await {
                 Ok(client) => client,
@@ -136,7 +138,6 @@ impl Collar {
 
             loop {
                 info!("Starting background token refresh");
-                interval.tick().await;
                 match http::refresh_secrets(
                     base_url.clone(),
                     client.clone(),
@@ -147,7 +148,8 @@ impl Collar {
                 {
                     Ok(_) => {}
                     Err(e) => panic!("Failed to refresh secrets: {:?}", e),
-                }
+                };
+                interval.tick().await;
             }
         });
 
