@@ -185,6 +185,8 @@ where
         reqwest::header::HeaderValue::from_str(&format!("Bearer {}", &secrets.access_token))?,
     );
 
+    info!("With headers: {headers:?}");
+
     let mut req = client
         .request(method.clone(), url.clone())
         .headers(headers.clone());
