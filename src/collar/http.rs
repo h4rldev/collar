@@ -174,6 +174,13 @@ where
             reqwest::header::CONTENT_TYPE,
             reqwest::header::HeaderValue::from_str("application/json")?,
         );
+    } else {
+        // This is hacky, and I'll remove this once I implement a better handling of content-type
+        // in the backend
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            reqwest::header::HeaderValue::from_str("")?,
+        );
     }
 
     headers.insert(
