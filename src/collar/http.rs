@@ -4,6 +4,8 @@ use std::{
     time::Duration,
 };
 
+use crate::collar::fetch_cached_secrets;
+
 use super::{Collar, CollarError, Secrets};
 use dotenvy::dotenv;
 use reqwest::{Client, Method, StatusCode};
@@ -51,20 +53,19 @@ pub(crate) async fn get_secrets(client: Client, base_url: String) -> Result<Secr
         break;
     }
 
-    if !status.is_success() {
-        let mut file_to_read = std::fs::File::open(".secrets.json")?;
-        let mut secrets_str = String::new();
-        file_to_read.read_to_string(&mut secrets_str)?;
-        response = secrets_str;
+    if status.is_success() {
+        let secrets = serde_json::from_str(&response).unwrap();
+
+        info!("Got secrets from response");
+        let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
+        let secrets_str = serde_json::to_string(&secrets).unwrap();
+        file_to_write.write_all(secrets_str.as_bytes()).unwrap();
+
+        return Ok(secrets);
     }
 
-    let secrets = serde_json::from_str(&response).unwrap();
-
-    info!("Got secrets");
-    let mut file_to_write = std::fs::File::create(".secrets.json").unwrap();
-    let secrets_str = serde_json::to_string(&secrets).unwrap();
-    file_to_write.write_all(secrets_str.as_bytes()).unwrap();
-
+    let secrets: Secrets = fetch_cached_secrets()?;
+    info!("Got cached secrets");
     Ok(secrets)
 }
 
@@ -119,19 +120,7 @@ pub(crate) async fn refresh_secrets(
     response = String::new();
     status = StatusCode::IM_A_TEAPOT;
 
-    let mut cached_secrets_buf = String::new();
-    let mut cached_secrets_file = match std::fs::File::open(".secrets.json") {
-        Ok(file) => file,
-        Err(err) => {
-            return Err(CollarError::from(format!(
-                "No cached secrets to use for refresh: {err}"
-            )));
-        }
-    };
-
-    cached_secrets_file.read_to_string(&mut cached_secrets_buf)?;
-
-    let cached_secrets: Secrets = serde_json::from_str(&cached_secrets_buf)?;
+    let cached_secrets: Secrets = fetch_cached_secrets()?;
     let new_body = RefreshTokenRequest {
         access_token: cached_secrets.access_token,
         refresh_token: cached_secrets.refresh_token,

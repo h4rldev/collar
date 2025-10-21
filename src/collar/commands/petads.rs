@@ -82,12 +82,12 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             let embed = EmbedWrapper::new_application(&ctx)
                 .title("Your ad submission was successful! :3")
                 .author(
-                    CreateEmbedAuthor::new(ad.username.clone())
-                        .url(format!("{base_url}/user/{}", ad.username)),
+                    CreateEmbedAuthor::new(&ad.username)
+                        .url(format!("{base_url}/user/{}", &ad.username)),
                 )
-                .thumbnail(avatar_url)
-                .image(ad.image_url)
-                .field("Ad url", ad.ad_url.clone(), false)
+                .thumbnail(&avatar_url)
+                .image(&ad.image_url)
+                .field("Ad url", &ad.ad_url, false)
                 .field("Created at", formatted_created_at_timestamp, false)
                 .color(Color::from_rgb(0, 255, 0));
 
@@ -99,8 +99,14 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
             let submission_embed = EmbedWrapper::new_application(&ctx)
                 .title("New ad submission :3")
-                .author(CreateEmbedAuthor::new(format!("from: {}", ad.username)))
-                .field("Website", ad.ad_url, false)
+                .author(CreateEmbedAuthor::new(format!(
+                    "from: {}",
+                    ctx.author().name
+                )))
+                .field("Petring Username", &ad.username, false)
+                .field("Ad url", &ad.ad_url, false)
+                .thumbnail(&avatar_url)
+                .image(&ad.image_url)
                 .color(Color::from_rgb(0, 0, 255));
 
             let mut notif = Notif::new(&ctx);
@@ -213,12 +219,12 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             let embed = EmbedWrapper::new_application(&ctx)
                 .title("Your edit was successful! :3")
                 .author(
-                    CreateEmbedAuthor::new(ad.username.clone())
-                        .url(format!("{base_url}/user/{}", ad.username)),
+                    CreateEmbedAuthor::new(&ad.username)
+                        .url(format!("{base_url}/user/{}", &ad.username)),
                 )
-                .thumbnail(avatar_url)
-                .image(ad.image_url.clone())
-                .field("Ad url", ad.ad_url.clone(), false)
+                .thumbnail(&avatar_url)
+                .image(&ad.image_url)
+                .field("Ad url", &ad.ad_url, false)
                 .field("Created", &formatted_created_at_timestamp, false)
                 .field("Edited", &formatted_edited_at_timestamp, false)
                 .field("Verified", &formatted_verified_at_timestamp, false)
@@ -232,12 +238,12 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
             let edit_notif_embed = EmbedWrapper::new_application(&ctx)
                 .title("Ad edited :3")
-                .description(format!("{user_mention} has edited their ad in PetAds :3"))
+                .description(format!("{user_mention} has edited their ad in PetAds :P"))
                 .field("Created", &formatted_created_at_timestamp, false)
                 .field("Verified", &formatted_verified_at_timestamp, false)
                 .field("Edited", &formatted_edited_at_timestamp, false)
-                .thumbnail(user_pfp)
-                .image(ad.image_url)
+                .thumbnail(&user_pfp)
+                .image(&ad.image_url)
                 .color(Color::from_rgb(0, 255, 0));
 
             let mut notif = Notif::new(&ctx);
@@ -312,9 +318,10 @@ pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
 
             let embed = EmbedWrapper::new_application(&ctx)
                 .title("Your verification was successful")
-                .author(CreateEmbedAuthor::new(format!("for: {}", ad.username)))
-                .url(ad.ad_url.clone())
+                .author(CreateEmbedAuthor::new(format!("for: {}", &ad.username)))
+                .url(&ad.ad_url)
                 .thumbnail(avatar_url)
+                .image(&ad.image_url)
                 .field("Created", created_at_timestamp, false)
                 .field("Verified", verified_at_timestamp, false)
                 .color(Color::from_rgb(0, 255, 0));
@@ -324,6 +331,11 @@ pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
                 .description(format!(
                     "Hi, there, {user_mention}, your ad has been verified :3"
                 ))
+                .author(CreateEmbedAuthor::new(format!(
+                    "Verified by: {}",
+                    ctx.author().name
+                )))
+                .image(&ad.image_url)
                 .author(CreateEmbedAuthor::new(user.name.clone()))
                 .color(Color::from_rgb(0, 255, 0));
 

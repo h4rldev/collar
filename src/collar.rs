@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{io::Read, sync::Arc};
 
 use dotenvy::dotenv;
 use poise::serenity_prelude::{CreateEmbed, CreateEmbedFooter, UserId};
@@ -72,6 +72,34 @@ impl EmbedWrapper {
 }
 
 pub const COLLAR_FOOTER: &str = "Collar :3, a Discord bot helper for PetRing and PetAds :3";
+
+pub(crate) fn fetch_cached_secrets() -> Result<Secrets, CollarError> {
+    let mut cached_secrets_buf = String::new();
+    let mut cached_secrets_file = match std::fs::File::open(".secrets.json") {
+        Ok(file) => file,
+        Err(err) => {
+            return Err(CollarError::from(format!(
+                "There was an error opening the cached secrets file: {err}"
+            )));
+        }
+    };
+
+    match cached_secrets_file.read_to_string(&mut cached_secrets_buf) {
+        Ok(_) => (),
+        Err(err) => {
+            return Err(CollarError::from(format!(
+                "There was an error reading the cached secrets file: {err}"
+            )));
+        }
+    };
+
+    match serde_json::from_str::<Secrets>(&cached_secrets_buf) {
+        Ok(secrets) => Ok(secrets),
+        Err(err) => Err(CollarError::from(format!(
+            "Failed to deserialize cached secrets: {err}"
+        ))),
+    }
+}
 
 impl Collar {
     pub async fn new(base_url: Option<String>) -> Self {
