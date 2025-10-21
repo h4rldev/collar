@@ -198,28 +198,32 @@ where
         let resp_text = resp.text().await?;
         debug!("Response_text: {resp_text}");
 
-        match serde_json::from_str::<R>(&resp_text) {
-            Ok(return_type) => return Ok(ResponseTypes::Success(return_type)),
+        return match serde_json::from_str::<R>(&resp_text) {
+            Ok(return_type) => Ok(ResponseTypes::Success(return_type)),
             Err(err) => {
-                error!("Failed to convert response to json: {err}");
-                return Ok(ResponseTypes::Error(ErrorResponse {
+                error!("Failed to convert response to json: {err}, response: {resp_text}");
+                Ok(ResponseTypes::Error(ErrorResponse {
                     status: 500,
-                    message: "Failed to convert response to json".to_string(),
-                }));
+                    message: format!(
+                        "Failed to convert response to json: {err}, response: {resp_text}"
+                    ),
+                }))
             }
-        }
+        };
     } else if resp.status() != 401 {
         let resp_text = resp.text().await?;
-        error!("Response_text: {resp_text}");
+        debug!("Response_text: {resp_text}");
 
-        match serde_json::from_str::<ErrorResponse>(&resp_text) {
-            Ok(error) => return Ok(ResponseTypes::Error(error)),
+        return match serde_json::from_str::<ErrorResponse>(&resp_text) {
+            Ok(error) => Ok(ResponseTypes::Error(error)),
             Err(err) => {
-                error!("Failed to convert response to json: {err}");
-                return Ok(ResponseTypes::Error(ErrorResponse {
+                error!("Failed to convert response to json: {err}, response: {resp_text}");
+                Ok(ResponseTypes::Error(ErrorResponse {
                     status: 500,
-                    message: "Failed to convert response to json".to_string(),
-                }));
+                    message: format!(
+                        "Failed to convert response to json: {err}, response: {resp_text}"
+                    ),
+                }))
             }
         };
     }
@@ -259,27 +263,32 @@ where
 
     if !resp.status().is_success() {
         let resp_text = resp.text().await?;
-        error!("Response_text: {resp_text}");
+        debug!("Response_text: {resp_text}");
 
-        match serde_json::from_str::<ErrorResponse>(&resp_text) {
-            Ok(error) => return Ok(ResponseTypes::Error(error)),
+        return match serde_json::from_str::<ErrorResponse>(&resp_text) {
+            Ok(error) => Ok(ResponseTypes::Error(error)),
             Err(err) => {
-                error!("Failed to convert response to json: {err}");
-                return Ok(ResponseTypes::Error(ErrorResponse {
+                error!("Failed to convert response to json: {err}, response: {resp_text}");
+                Ok(ResponseTypes::Error(ErrorResponse {
                     status: 500,
-                    message: "Failed to convert response to json".to_string(),
-                }));
+                    message: format!(
+                        "Failed to convert response to json: {err}, response: {resp_text}"
+                    ),
+                }))
             }
         };
     }
 
-    match resp.json::<R>().await {
-        Ok(response) => Ok(ResponseTypes::Success(response)),
+    let resp_text = resp.text().await?;
+    match serde_json::from_str::<R>(&resp_text) {
+        Ok(return_type) => Ok(ResponseTypes::Success(return_type)),
         Err(err) => {
-            error!("Failed to convert response to json: {err}");
+            error!("Failed to convert response to json: {err}, response: {resp_text}");
             Ok(ResponseTypes::Error(ErrorResponse {
                 status: 500,
-                message: "Failed to convert response to json".to_string(),
+                message: format!(
+                    "Failed to convert response to json: {err}, response: {resp_text}"
+                ),
             }))
         }
     }
