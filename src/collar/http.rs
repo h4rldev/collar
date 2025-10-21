@@ -1,15 +1,8 @@
-use std::{
-    fmt::Debug,
-    io::{Read, Write},
-    time::Duration,
-};
-
-use crate::collar::fetch_cached_secrets;
-
-use super::{Collar, CollarError, Secrets};
+use super::{Collar, CollarError, Secrets, fetch_cached_secrets};
 use dotenvy::dotenv;
 use reqwest::{Client, Method, StatusCode};
 use serde::{Deserialize, Serialize};
+use std::{fmt::Debug, io::Write, time::Duration};
 use tokio::time::sleep;
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
@@ -193,13 +186,6 @@ where
         headers.insert(
             reqwest::header::CONTENT_TYPE,
             reqwest::header::HeaderValue::from_str("application/json")?,
-        );
-    } else {
-        // This is hacky, and I'll remove this once I implement a better handling of content-type
-        // in the backend
-        headers.insert(
-            reqwest::header::CONTENT_TYPE,
-            reqwest::header::HeaderValue::from_str("")?,
         );
     }
 
