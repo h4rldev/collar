@@ -453,8 +453,8 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             url: user_url,
             discord_id: user_id.into(),
         }),
-        "/api/put/user/edit/",
-        Method::PUT,
+        "/api/patch/user/edit/",
+        Method::PATCH,
     )
     .await?;
     match response {
@@ -614,7 +614,7 @@ pub async fn verify_user(
     user: serenity::User,
 ) -> Result<(), CollarError> {
     let user_id = user.id;
-    let url = format!("/api/put/user/verify/{}", user_id);
+    let url = format!("/api/patch/user/verify/{}", user_id);
 
     let user_name = user.clone().name;
     let user_mention = user.mention();
@@ -622,7 +622,7 @@ pub async fn verify_user(
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
-    let response = make_request(ctx.data().clone(), None::<String>, &url, Method::PUT).await?;
+    let response = make_request(ctx.data().clone(), None::<String>, &url, Method::PATCH).await?;
     match response {
         ResponseTypes::Success(user) => {
             let user: User = user;

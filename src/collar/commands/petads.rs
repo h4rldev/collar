@@ -180,8 +180,8 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             image_url,
             discord_id: ctx.author().id.into(),
         }),
-        "/api/put/ad/edit/",
-        Method::PUT,
+        "/api/post/ad/edit/",
+        Method::POST,
     )
     .await?;
     match response {
@@ -286,14 +286,14 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 )]
 pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Result<(), CollarError> {
     let user_id = user.id;
-    let url = format!("/api/put/ad/verify/{}", user_id);
+    let url = format!("/api/post/ad/verify/{}", user_id);
 
     let user_mention = ctx.http().get_user(user_id).await?.mention();
 
     let bot_id = ctx.data().bot_id;
     let bot_pfp = ctx.cache().user(bot_id).unwrap().avatar_url().unwrap(); // if this fails to unwrap, i'll buy myself a beer
 
-    let response = make_request(ctx.data().clone(), None::<String>, &url, Method::PUT).await?;
+    let response = make_request(ctx.data().clone(), None::<String>, &url, Method::POST).await?;
     match response {
         ResponseTypes::Success(ad) => {
             let ad: Ad = ad;
