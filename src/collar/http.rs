@@ -169,7 +169,7 @@ where
 
     let mut headers = reqwest::header::HeaderMap::new();
 
-    if body.is_some() && method != Method::GET {
+    if method != Method::GET {
         headers.insert(
             reqwest::header::CONTENT_TYPE,
             reqwest::header::HeaderValue::from_str("application/json")?,
@@ -241,7 +241,7 @@ where
 
         headers = reqwest::header::HeaderMap::new();
 
-        if body.is_some() && method != Method::GET {
+        if method != Method::GET {
             headers.insert(
                 reqwest::header::CONTENT_TYPE,
                 reqwest::header::HeaderValue::from_str("application/json")?,
