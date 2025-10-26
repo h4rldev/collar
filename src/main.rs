@@ -22,11 +22,12 @@ where
     E: Send + Sync + From<poise::serenity_prelude::Error>,
 {
     dotenv().ok();
-    let base_url = std::env::var("WEBRING_BASE_URL").expect("missing WEBRING_BASE_URL");
+    let web_base_url = std::env::var("WEB_BASE_URL").expect("missing WEB_BASE_URL");
+    let api_base_url = std::env::var("API_BASE_URL").expect("missing API_BASE_URL");
 
     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
-    Ok(Collar::new(Some(base_url)).await)
+    Ok(Collar::new(api_base_url, web_base_url).await)
 }
 
 #[tokio::main]

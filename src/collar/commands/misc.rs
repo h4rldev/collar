@@ -14,7 +14,22 @@ use tokio::time::Instant;
 async fn measure_api_latency(ctx: CollarContext<'_>) -> Result<(u128, u128), reqwest::Error> {
     let total_start = Instant::now();
     let client = ctx.data().client.clone();
-    let url = format!("{}/api/", ctx.data().api_base_url);
+    let url = ctx.data().api_base_url.clone();
+
+    let res = client.get(url).send().await?;
+
+    let latency = total_start.elapsed().as_millis(); // Time to first byte
+
+    let _body = res.bytes().await?;
+    let total_time = total_start.elapsed().as_millis(); // Total response time
+
+    Ok((latency, total_time))
+}
+
+async fn measure_web_latency(ctx: CollarContext<'_>) -> Result<(u128, u128), reqwest::Error> {
+    let total_start = Instant::now();
+    let client = ctx.data().client.clone();
+    let url = ctx.data().web_base_url.clone();
 
     let res = client.get(url).send().await?;
 
@@ -36,7 +51,8 @@ async fn measure_api_latency(ctx: CollarContext<'_>) -> Result<(u128, u128), req
 )]
 pub async fn ping(ctx: CollarContext<'_>) -> Result<(), CollarError> {
     let discord_ping = ctx.ping().await.as_millis();
-    let petring_ping = measure_api_latency(ctx).await?;
+    let petring_api_ping = measure_api_latency(ctx).await?;
+    let petring_web_ping = measure_web_latency(ctx).await?;
 
     let embed = EmbedWrapper::new_normal(&ctx)
         .title("Pong!")
@@ -46,8 +62,19 @@ pub async fn ping(ctx: CollarContext<'_>) -> Result<(), CollarError> {
             true,
         )
         .field(
-            "Petring",
-            format!("Latency: {}ms, Total: {}ms", petring_ping.0, petring_ping.1),
+            "PetRing API",
+            format!(
+                "Latency: {}ms, Total: {}ms",
+                petring_api_ping.0, petring_api_ping.1
+            ),
+            true,
+        )
+        .field(
+            "PetRing Web",
+            format!(
+                "Latency: {}ms, Total: {}ms",
+                petring_web_ping.0, petring_web_ping.1
+            ),
             true,
         );
 

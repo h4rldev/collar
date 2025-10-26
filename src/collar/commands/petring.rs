@@ -31,12 +31,12 @@ use tracing::info;
 pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
     let data = ctx.data();
     let user_id = ctx.author().id;
-    let base_url = data.api_base_url.clone();
+    let base_url = data.web_base_url.clone();
 
     let response = make_request(
         data.clone(),
         None::<String>,
-        &format!("/api/get/user/by-discord/{}", user_id),
+        &format!("/get/user/by-discord/{}", user_id),
         Method::GET,
     )
     .await?;
@@ -142,12 +142,12 @@ pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
 pub async fn get_user(ctx: CollarContext<'_>, user: serenity::User) -> Result<(), CollarError> {
     let data = ctx.data();
     let user_id = user.id;
-    let base_url = data.api_base_url.clone();
+    let base_url = data.web_base_url.clone();
 
     let response = make_request(
         data.clone(),
         None::<String>,
-        &format!("/api/get/user/by-discord/{}", user_id),
+        &format!("/get/user/by-discord/{}", user_id),
         Method::GET,
     )
     .await?;
@@ -276,7 +276,7 @@ pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             url: user_url,
             discord_id: discord_id.into(),
         }),
-        "/api/post/user/submit",
+        "/post/user/submit",
         Method::POST,
     )
     .await?;
@@ -426,7 +426,7 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 
     let data = ctx.data();
     let user_id = ctx.author().id;
-    let base_url = data.api_base_url.clone();
+    let base_url = data.web_base_url.clone();
 
     let response = make_request(
         data.clone(),
@@ -435,7 +435,7 @@ pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             url: user_url,
             discord_id: user_id.into(),
         }),
-        "/api/patch/user/edit/",
+        "/patch/user/edit/",
         Method::PATCH,
     )
     .await?;
@@ -595,7 +595,7 @@ pub async fn verify_user(
     user: serenity::User,
 ) -> Result<(), CollarError> {
     let user_id = user.id;
-    let url = format!("/api/patch/user/verify/{}", user_id);
+    let url = format!("/patch/user/verify/{}", user_id);
 
     let user_name = user.clone().name;
     let user_mention = user.mention();
@@ -698,7 +698,7 @@ pub async fn remove_user(
     user: serenity::User,
 ) -> Result<(), CollarError> {
     let user_id = user.id;
-    let url = format!("/api/delete/user/by-discord/{}", user_id);
+    let url = format!("/delete/user/by-discord/{}", user_id);
 
     let response = make_request(ctx.data().clone(), None::<String>, &url, Method::DELETE).await?;
     match response {

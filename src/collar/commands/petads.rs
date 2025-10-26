@@ -50,7 +50,7 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             image_url,
             discord_id: ctx.author().id.into(),
         }),
-        "/api/post/ad/submit",
+        "/post/ad/submit",
         Method::POST,
     )
     .await?;
@@ -71,7 +71,7 @@ pub async fn submit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 }
             };
 
-            let base_url = ctx.data().api_base_url.clone();
+            let base_url = ctx.data().web_base_url.clone();
 
             let formatted_created_at_timestamp = FormattedTimestamp::new(
                 Timestamp::from(DateTime::parse_from_rfc3339(&ad.created_at)?),
@@ -175,7 +175,7 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
             image_url,
             discord_id: ctx.author().id.into(),
         }),
-        "/api/patch/ad/edit/",
+        "/patch/ad/edit/",
         Method::PATCH,
     )
     .await?;
@@ -196,7 +196,7 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
                 }
             };
 
-            let base_url = ctx.data().api_base_url.clone();
+            let base_url = ctx.data().web_base_url.clone();
 
             let formatted_created_at_timestamp = FormattedTimestamp::new(
                 Timestamp::from(DateTime::parse_from_rfc3339(&ad.created_at)?),
@@ -281,7 +281,7 @@ pub async fn edit_ad(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
 )]
 pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Result<(), CollarError> {
     let user_id = user.id;
-    let url = format!("/api/patch/ad/verify/{}", user_id);
+    let url = format!("/patch/ad/verify/{}", user_id);
 
     let user_mention = ctx.http().get_user(user_id).await?.mention();
 
@@ -387,7 +387,7 @@ pub async fn verify_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Resul
 )]
 pub async fn remove_ad(ctx: CollarAppContext<'_>, user: serenity::User) -> Result<(), CollarError> {
     let user_id = user.id;
-    let url = format!("/api/delete/ad/by-discord/{}", user_id);
+    let url = format!("/delete/ad/by-discord/{}", user_id);
 
     let user_mention = user.mention();
     let user_pfp = user.avatar_url().unwrap();

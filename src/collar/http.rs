@@ -16,7 +16,10 @@ struct GetSecretsRequest {
     bot_token: String,
 }
 
-pub(crate) async fn get_secrets(client: Client, base_url: String) -> Result<Secrets, CollarError> {
+pub(crate) async fn get_secrets(
+    client: Client,
+    api_base_url: String,
+) -> Result<Secrets, CollarError> {
     dotenv().ok();
     let token = std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_BOT_TOKEN");
 
@@ -25,7 +28,7 @@ pub(crate) async fn get_secrets(client: Client, base_url: String) -> Result<Secr
     let mut response: String = String::new();
 
     while status == StatusCode::IM_A_TEAPOT {
-        let url = format!("{base_url}/bot/setup");
+        let url = format!("{api_base_url}/bot/setup");
         let resp = client
             .post(url)
             .json(&body)
@@ -69,7 +72,7 @@ struct RefreshTokenRequest {
 }
 
 pub(crate) async fn refresh_secrets(
-    base_url: String,
+    api_base_url: String,
     client: Client,
     refresh_token: String,
     access_token: String,
@@ -83,7 +86,7 @@ pub(crate) async fn refresh_secrets(
     let mut status: StatusCode = StatusCode::IM_A_TEAPOT;
 
     while response.is_empty() && status == StatusCode::IM_A_TEAPOT {
-        let url = format!("{base_url}/bot/refresh");
+        let url = format!("{api_base_url}/bot/refresh");
         let resp = client.post(url).json(&body);
         match resp.send().await {
             Ok(resp) => {
@@ -120,7 +123,7 @@ pub(crate) async fn refresh_secrets(
     };
 
     while response.is_empty() && status == StatusCode::IM_A_TEAPOT {
-        let url = format!("{base_url}/bot/refresh");
+        let url = format!("{api_base_url}/bot/refresh");
         let resp = client.post(url).json(&new_body);
         match resp.send().await {
             Ok(resp) => {

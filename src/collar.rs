@@ -33,6 +33,7 @@ pub(crate) struct Collar {
     feedback_webhook: Arc<Mutex<Option<String>>>,
     client: Client,
     api_base_url: String,
+    web_base_url: String,
     bot_id: UserId,
 }
 
@@ -102,17 +103,12 @@ pub(crate) fn fetch_cached_secrets() -> Result<Secrets, CollarError> {
 }
 
 impl Collar {
-    pub async fn new(base_url: Option<String>) -> Self {
+    pub async fn new(api_base_url: String, web_base_url: String) -> Self {
         dotenv().ok();
 
         let client = match http::make_reqwest_client().await {
             Ok(client) => client,
             Err(e) => panic!("Failed to create reqwest client: {:?}", e),
-        };
-
-        let base_url = match base_url {
-            Some(url) => url,
-            None => "http://localhost:8080".to_string(),
         };
 
         let bot_id = std::env::var("BOT_ID").expect("missing BOT_ID");
@@ -141,14 +137,14 @@ impl Collar {
         };
 
         let client_clone = client.clone();
-        let base_url_clone = base_url.clone();
+        let api_base_url_clone = api_base_url.clone();
 
         let mut interval = interval_at(
             Instant::now() + Duration::from_secs(30 * 60),
             Duration::from_secs(30 * 60),
         );
 
-        let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
+        let secrets = match http::get_secrets(client.clone(), api_base_url.clone()).await {
             Ok(secrets) => secrets,
             Err(e) => panic!("Failed to get secrets: {:?}", e),
         };
@@ -159,7 +155,7 @@ impl Collar {
                 Err(e) => panic!("Failed to create reqwest client: {:?}", e),
             };
 
-            let secrets = match http::get_secrets(client.clone(), base_url.clone()).await {
+            let secrets = match http::get_secrets(client.clone(), api_base_url.clone()).await {
                 Ok(secrets) => secrets,
                 Err(e) => panic!("Failed to get secrets: {:?}", e),
             };
@@ -167,7 +163,7 @@ impl Collar {
             loop {
                 info!("Starting background token refresh");
                 match http::refresh_secrets(
-                    base_url.clone(),
+                    api_base_url.clone(),
                     client.clone(),
                     secrets.refresh_token.clone(),
                     secrets.access_token.clone(),
@@ -186,7 +182,8 @@ impl Collar {
             notif_channel_ids: Arc::new(Mutex::new(notif_channel_ids)),
             feedback_webhook: Arc::new(Mutex::new(feedback_webhook)),
             client: client_clone,
-            api_base_url: base_url_clone,
+            api_base_url: api_base_url_clone,
+            web_base_url,
             bot_id: bot_id.parse::<UserId>().unwrap(),
         }
     }

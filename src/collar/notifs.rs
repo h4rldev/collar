@@ -450,7 +450,7 @@ async fn verify_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<User
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
-        &format!("/api/patch/user/verify/{}", discord_id),
+        &format!("/patch/user/verify/{}", discord_id),
         Method::PATCH,
     )
     .await?;
@@ -471,7 +471,7 @@ async fn verify_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<Ad, Co
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
-        &format!("/api/patch/ad/verify/{}", discord_id),
+        &format!("/patch/ad/verify/{}", discord_id),
         Method::PATCH,
     )
     .await?;
@@ -492,7 +492,7 @@ async fn reject_ad(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<Ad, Co
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
-        &format!("/api/delete/ad/by-discord/{discord_id}"),
+        &format!("/delete/ad/by-discord/{discord_id}"),
         Method::DELETE,
     )
     .await?;
@@ -513,7 +513,7 @@ async fn reject_user(ctx: &CollarAppContext<'_>, discord_id: u64) -> Result<User
     let response = make_request(
         ctx.data().clone(),
         None::<String>,
-        &format!("/api/delete/user/by-discord/{discord_id}"),
+        &format!("/delete/user/by-discord/{discord_id}"),
         Method::DELETE,
     )
     .await?;
