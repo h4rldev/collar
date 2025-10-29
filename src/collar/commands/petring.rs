@@ -1,752 +1,776 @@
-use crate::collar::EmbedWrapper;
+use crate::collar::{
+  EmbedWrapper,
+  commands::{send_generic_error_application, send_generic_error_normal},
+  notifs::VerifyType,
+};
 
 use super::{
-    AddWebsite, CollarAppContext, CollarContext, CollarError, EditSubmission, EditedUser, User,
-    UserEditSubmission, UserSubmission,
-    http::{ErrorResponse, ResponseTypes, make_request},
-    notifs::{Notif, SubmitType},
+  AddWebsite, CollarAppContext, CollarContext, CollarError, EditSubmission, EditedUser, User,
+  UserEditSubmission, UserSubmission,
+  http::{ErrorResponse, ResponseTypes, make_request},
+  notifs::{Notif, SubmitType},
 };
 use chrono::DateTime;
 use poise::{CreateReply, Modal, command, serenity_prelude as serenity};
 use reqwest::Method;
 use serenity::{
-    Color, CreateEmbedAuthor, FormattedTimestamp, FormattedTimestampStyle, Mentionable, Timestamp,
+  Color, CreateEmbedAuthor, FormattedTimestamp, FormattedTimestampStyle, Mentionable, Timestamp,
 };
 use tracing::info;
 
 #[command(
-    slash_command,
-    description_localized(
-        locale = "en-US",
-        description = "See your petring account information, as a verified user"
-    ),
-    description_localized(
-        locale = "sv-SE",
-        description = "Se din petrings kontoinformation, som en verifierad användare"
-    ),
-    name_localized(locale = "en-US", name = "me"),
-    name_localized(locale = "sv-SE", name = "mig"),
-    category = "PetRing"
+  slash_command,
+  description_localized(
+    locale = "en-US",
+    description = "See your petring account information, as a verified user"
+  ),
+  description_localized(
+    locale = "sv-SE",
+    description = "Se din petrings kontoinformation, som en verifierad användare"
+  ),
+  name_localized(locale = "en-US", name = "me"),
+  name_localized(locale = "sv-SE", name = "mig"),
+  category = "PetRing"
 )]
 pub async fn me(ctx: CollarContext<'_>) -> Result<(), CollarError> {
-    let data = ctx.data();
-    let user_id = ctx.author().id;
-    let base_url = data.web_base_url.clone();
+  let data = ctx.data();
+  let cache = data.cache.lock().await;
 
-    let response = make_request(
-        data.clone(),
-        None::<String>,
-        &format!("/get/user/by-discord/{}", user_id),
-        Method::GET,
-    )
-    .await?;
-    match response {
-        ResponseTypes::Success(user) => {
-            let user: User = user;
+  let user_id = ctx.author().id;
+  let web_base_url = cache.get_web_base_url();
 
-            let user_id_u64: u64 = user_id.into();
+  let response = make_request(
+    data.clone(),
+    None::<String>,
+    &format!("/get/user/by-discord/{}", user_id),
+    Method::GET,
+  )
+  .await?;
+  match response {
+    ResponseTypes::Success(user) => {
+      let user: User = user;
 
-            if user.discord_id != user_id_u64 {
-                return Err("User not found".into());
-            }
+      let user_id_u64: u64 = user_id.into();
 
-            if !user.verified {
-                return Err("User not verified".into());
-            }
+      if user.discord_id != user_id_u64 {
+        return send_generic_error_normal(ctx, "User not found").await;
+      }
 
-            let avatar_url = match ctx.http().get_user(user_id).await {
-                Ok(user) => user.avatar_url().unwrap(),
-                Err(_) => {
-                    return Err("User not found".into());
-                }
-            };
+      if !user.verified {
+        return send_generic_error_normal(ctx, "User not verified").await;
+      }
 
-            let created_at_timestamp =
-                Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at)?);
-
-            let formatted_created_at_timestamp = FormattedTimestamp::new(
-                created_at_timestamp,
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            let mut formatted_edited_at_timestamp = "Never".to_string();
-
-            let formatted_verified_at_timestamp = FormattedTimestamp::new(
-                Timestamp::from(DateTime::parse_from_rfc3339(&user.verified_at).unwrap()),
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            if !user.edited_at.is_empty() {
-                formatted_edited_at_timestamp = FormattedTimestamp::new(
-                    Timestamp::from(DateTime::parse_from_rfc3339(&user.edited_at).unwrap()),
-                    Some(FormattedTimestampStyle::RelativeTime),
-                )
-                .to_string();
-            }
-
-            let user_url = format!("{base_url}/user/{}", user.username);
-
-            info!("User url: {}", user_url);
-
-            let embed = EmbedWrapper::new_normal(&ctx)
-                .title("Your information :3")
-                .author(
-                    CreateEmbedAuthor::new(format!("{} (press here to visit)", user.username))
-                        .url(user_url),
-                )
-                .thumbnail(avatar_url)
-                .field("User Website", user.url, false)
-                .field("Created at", formatted_created_at_timestamp, false)
-                .field("Edited at", formatted_edited_at_timestamp, false)
-                .field("Verified at", formatted_verified_at_timestamp, false)
-                .color(Color::from_rgb(0, 0, 255));
-
-            let reply = CreateReply::default().embed(embed).reply(true);
-            ctx.send(reply).await?;
+      let avatar_url = match ctx.http().get_user(user_id).await {
+        Ok(user) => user.avatar_url().unwrap(),
+        Err(_) => {
+          return Err("User not found".into());
         }
-        ResponseTypes::Error(_error) => {
-            let error: ErrorResponse = _error;
+      };
 
-            let embed = EmbedWrapper::new_normal(&ctx)
-                .title(format!("Error {}", error.status))
-                .description(error.message)
-                .color(Color::from_rgb(255, 0, 0));
+      let created_at_timestamp = Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at)?);
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
-            ctx.send(reply).await?;
-        }
+      let formatted_created_at_timestamp = FormattedTimestamp::new(
+        created_at_timestamp,
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
+
+      let mut formatted_edited_at_timestamp = "Never".to_string();
+
+      let formatted_verified_at_timestamp = FormattedTimestamp::new(
+        Timestamp::from(DateTime::parse_from_rfc3339(&user.verified_at).unwrap()),
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
+
+      if !user.edited_at.is_empty() {
+        formatted_edited_at_timestamp = FormattedTimestamp::new(
+          Timestamp::from(DateTime::parse_from_rfc3339(&user.edited_at).unwrap()),
+          Some(FormattedTimestampStyle::RelativeTime),
+        )
+        .to_string();
+      }
+
+      let user_url = format!("{web_base_url}/user/{}", user.username);
+
+      info!("User url: {}", user_url);
+
+      let embed = EmbedWrapper::new_normal(&ctx)
+        .title("Your information :3")
+        .author(
+          CreateEmbedAuthor::new(format!("{} (press here to visit)", user.username)).url(user_url),
+        )
+        .thumbnail(avatar_url)
+        .field("User Website", user.url, false)
+        .field("Created at", formatted_created_at_timestamp, false)
+        .field("Edited at", formatted_edited_at_timestamp, false)
+        .field("Verified at", formatted_verified_at_timestamp, false)
+        .color(Color::from_rgb(0, 0, 255));
+
+      let reply = CreateReply::default().embed(embed).reply(true);
+      ctx.send(reply).await?;
     }
+    ResponseTypes::Error(_error) => {
+      let error: ErrorResponse = _error;
 
-    Ok(())
+      let embed = EmbedWrapper::new_normal(&ctx)
+        .title(format!("Error {}", error.status))
+        .description(error.message)
+        .color(Color::from_rgb(255, 0, 0));
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+      ctx.send(reply).await?;
+    }
+  }
+
+  Ok(())
 }
 
 #[command(
-    slash_command,
-    description_localized(
-        locale = "en-US",
-        description = "Get account information for a verified petring user"
-    ),
-    description_localized(
-        locale = "sv-SE",
-        description = "Hämta kontoinformation för en verifierad petring användare"
-    ),
-    name_localized(locale = "en-US", name = "get_user"),
-    name_localized(locale = "sv-SE", name = "hämta_användare"),
-    category = "PetRing"
+  slash_command,
+  description_localized(
+    locale = "en-US",
+    description = "Get account information for a verified petring user"
+  ),
+  description_localized(
+    locale = "sv-SE",
+    description = "Hämta kontoinformation för en verifierad petring användare"
+  ),
+  name_localized(locale = "en-US", name = "get_user"),
+  name_localized(locale = "sv-SE", name = "hämta_användare"),
+  category = "PetRing"
 )]
 pub async fn get_user(ctx: CollarContext<'_>, user: serenity::User) -> Result<(), CollarError> {
-    let data = ctx.data();
-    let user_id = user.id;
-    let base_url = data.web_base_url.clone();
+  let data = ctx.data();
+  let cache = data.cache.lock().await;
+  let user_id = user.id;
+  let web_base_url = cache.get_web_base_url();
+  let user_pfp = user.avatar_url().unwrap();
 
-    let response = make_request(
-        data.clone(),
-        None::<String>,
-        &format!("/get/user/by-discord/{}", user_id),
-        Method::GET,
-    )
-    .await?;
-    match response {
-        ResponseTypes::Success(user) => {
-            let user: User = user;
-            let user_id_u64: u64 = user_id.into();
+  let response = make_request(
+    data.clone(),
+    None::<String>,
+    &format!("/get/user/by-discord/{}", user_id),
+    Method::GET,
+  )
+  .await?;
+  match response {
+    ResponseTypes::Success(user) => {
+      let user: User = user;
+      let user_id_u64: u64 = user_id.into();
 
-            if user.discord_id != user_id_u64 {
-                return Err("User not found".into());
-            }
+      if user.discord_id != user_id_u64 {
+        return send_generic_error_normal(ctx, "User not found").await;
+      }
 
-            if !user.verified {
-                return Err("User not verified".into());
-            }
+      if !user.verified {
+        return send_generic_error_normal(ctx, "User not verified").await;
+      }
 
-            let avatar_url = match ctx.http().get_user(user_id).await {
-                Ok(user) => user.avatar_url().unwrap(),
-                Err(_) => {
-                    return Err("User not found".into());
-                }
-            };
-
-            let formatted_created_at_timestamp = FormattedTimestamp::new(
-                Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at)?),
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            let mut formatted_edited_at_timestamp = "Never".to_string();
-
-            let formatted_verified_at_timestamp = FormattedTimestamp::new(
-                Timestamp::from(DateTime::parse_from_rfc3339(&user.verified_at)?),
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            if !user.edited_at.is_empty() {
-                formatted_edited_at_timestamp = FormattedTimestamp::new(
-                    Timestamp::from(DateTime::parse_from_rfc3339(&user.edited_at)?),
-                    Some(FormattedTimestampStyle::RelativeTime),
-                )
-                .to_string();
-            }
-
-            let embed = EmbedWrapper::new_normal(&ctx)
-                .title(format!("Info for {} :3c", user.username))
-                .author(
-                    CreateEmbedAuthor::new(format!("{} (press here to visit)", user.username))
-                        .url(format!("{base_url}/user/{}", user.username)),
-                )
-                .thumbnail(avatar_url)
-                .field("User Website", user.url, false)
-                .field("Created", formatted_created_at_timestamp, false)
-                .field("Edited", formatted_edited_at_timestamp, false)
-                .field("Verified", formatted_verified_at_timestamp, false)
-                .color(Color::from_rgb(0, 0, 255));
-
-            let reply = CreateReply::default().embed(embed).reply(true);
-            ctx.send(reply).await?;
+      let avatar_url = match ctx.http().get_user(user_id).await {
+        Ok(user) => user.avatar_url().unwrap(),
+        Err(_) => {
+          return send_generic_error_normal(ctx, "User not found").await;
         }
-        ResponseTypes::Error(_error) => {
-            let error: ErrorResponse = _error;
+      };
 
-            let embed = EmbedWrapper::new_normal(&ctx)
-                .title(format!("Error {}", error.status))
-                .description(error.message)
-                .color(Color::from_rgb(255, 0, 0));
+      let formatted_created_at_timestamp = FormattedTimestamp::new(
+        Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at)?),
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
+      let mut formatted_edited_at_timestamp = "Never".to_string();
 
-            ctx.send(reply).await?;
-        }
+      let formatted_verified_at_timestamp = FormattedTimestamp::new(
+        Timestamp::from(DateTime::parse_from_rfc3339(&user.verified_at)?),
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
+
+      if !user.edited_at.is_empty() {
+        formatted_edited_at_timestamp = FormattedTimestamp::new(
+          Timestamp::from(DateTime::parse_from_rfc3339(&user.edited_at)?),
+          Some(FormattedTimestampStyle::RelativeTime),
+        )
+        .to_string();
+      }
+
+      let embed = EmbedWrapper::new_normal(&ctx)
+        .title(format!("Info for {} :3c", user.username))
+        .author(
+          CreateEmbedAuthor::new(format!("{} (press here to visit)", user.username))
+            .url(format!("{web_base_url}/user/{}", user.username))
+            .icon_url(user_pfp),
+        )
+        .thumbnail(avatar_url)
+        .field("User Website", user.url, false)
+        .field("Created", formatted_created_at_timestamp, false)
+        .field("Edited", formatted_edited_at_timestamp, false)
+        .field("Verified", formatted_verified_at_timestamp, false)
+        .color(Color::from_rgb(0, 0, 255));
+
+      let reply = CreateReply::default().embed(embed).reply(true);
+      ctx.send(reply).await?;
     }
+    ResponseTypes::Error(_error) => {
+      let error: ErrorResponse = _error;
 
-    Ok(())
+      let embed = EmbedWrapper::new_normal(&ctx)
+        .title(format!("Error {}", error.status))
+        .description(error.message)
+        .color(Color::from_rgb(255, 0, 0));
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+
+      ctx.send(reply).await?;
+    }
+  }
+
+  Ok(())
 }
 
 #[command(
-    slash_command,
-    description_localized(locale = "en-US", description = "Register a user to petring"),
-    description_localized(locale = "sv-SE", description = "Registrera en användare till petring"),
-    name_localized(locale = "en-US", name = "submit_user"),
-    name_localized(locale = "sv-SE", name = "skicka_användare"),
-    category = "PetRing"
+  slash_command,
+  description_localized(locale = "en-US", description = "Register a user to petring"),
+  description_localized(locale = "sv-SE", description = "Registrera en användare till petring"),
+  name_localized(locale = "en-US", name = "submit_user"),
+  name_localized(locale = "sv-SE", name = "skicka_användare"),
+  category = "PetRing"
 )]
 pub async fn submit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
-    let user_id = ctx.author().id;
+  let user_id = ctx.author().id;
 
-    let guild_id = match ctx.guild_id() {
-        Some(guild_id) => guild_id,
-        None => return Err("Failed to get guild id".into()),
-    };
+  let guild_id = match ctx.guild_id() {
+    Some(guild_id) => guild_id,
+    None => return send_generic_error_application(ctx, "Failed to get guild id").await,
+  };
 
-    let modal_data = AddWebsite::execute(ctx).await?;
-    let modal_data = match modal_data {
-        Some(modal_data) => modal_data,
-        None => {
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title("You didn't submit anything")
-                .description("No data was submitted 3:")
-                .color(Color::from_rgb(255, 0, 0));
+  let modal_data = AddWebsite::execute(ctx).await?;
+  let modal_data = match modal_data {
+    Some(modal_data) => modal_data,
+    None => {
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title("You didn't submit anything")
+        .description("No data was submitted 3:")
+        .color(Color::from_rgb(255, 0, 0));
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
 
-            ctx.send(reply).await?;
-            return Ok(());
-        }
-    };
-
-    let username = modal_data.username;
-    let user_url = modal_data.url;
-    let reason = modal_data.reason;
-    let discord_id = ctx.author().id;
-
-    let response = make_request(
-        ctx.data().clone(),
-        Some(UserSubmission {
-            username,
-            url: user_url,
-            discord_id: discord_id.into(),
-        }),
-        "/post/user/submit",
-        Method::POST,
-    )
-    .await?;
-    match response {
-        ResponseTypes::Success(user) => {
-            let user: User = user;
-            let user_id_u64: u64 = user_id.into();
-
-            if user_id_u64 != user.discord_id {
-                return Err("User not found".into());
-            }
-
-            let avatar_url = match ctx.http().get_user(user_id).await {
-                Ok(user) => user.avatar_url().unwrap(),
-                Err(_) => {
-                    return Err("User not found".into());
-                }
-            };
-
-            let joined_at_timestamp =
-                match ctx.http().get_member(guild_id, user_id).await?.joined_at {
-                    Some(joined_at) => joined_at,
-                    None => return Err("Failed to get joined at".into()),
-                };
-
-            let user_created_at_timestamp = ctx.http().get_user(user_id).await?.created_at();
-
-            let created_at_timestamp =
-                Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at).unwrap());
-
-            let formatted_created_at_timestamp = FormattedTimestamp::new(
-                created_at_timestamp,
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            let formatted_joined_at_timestamp = FormattedTimestamp::new(
-                joined_at_timestamp,
-                Some(FormattedTimestampStyle::RelativeTime),
-            )
-            .to_string();
-
-            let formatted_user_created_at_timestamp = FormattedTimestamp::new(
-                user_created_at_timestamp,
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title("Your submission was successful! :3")
-                .author(CreateEmbedAuthor::new(user.username))
-                .thumbnail(avatar_url)
-                .field("User Website", user.url.clone(), false)
-                .field(
-                    "Verification",
-                    "You're not verified yet, but we'll let you know when you are :3",
-                    false,
-                )
-                .field("Created", formatted_created_at_timestamp.clone(), false)
-                .color(Color::from_rgb(0, 0, 255));
-
-            let mut submission_embed = EmbedWrapper::new_application(&ctx)
-                .title("New submission :3")
-                .author(CreateEmbedAuthor::new(format!(
-                    "from: {}",
-                    ctx.author().name
-                )))
-                .field("Website", user.url, false)
-                .field("Created at", formatted_created_at_timestamp, false)
-                .field("User joined at", formatted_joined_at_timestamp, false)
-                .field(
-                    "User Created at",
-                    formatted_user_created_at_timestamp,
-                    false,
-                )
-                .color(Color::from_rgb(0, 0, 255));
-
-            if let Some(reason) = reason {
-                submission_embed = submission_embed.description(reason);
-            }
-
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
-            ctx.send(reply).await?;
-
-            let mut notif = Notif::new(&ctx);
-            notif = notif.set_embed(submission_embed);
-            notif.submit(&ctx, user_id.get(), SubmitType::User).await?;
-        }
-        ResponseTypes::Error(_error) => {
-            let error: ErrorResponse = _error;
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title(format!("Error {}", error.status))
-                .description(error.message)
-                .color(Color::from_rgb(255, 0, 0));
-
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
-
-            ctx.send(reply).await?;
-        }
+      ctx.send(reply).await?;
+      return Ok(());
     }
+  };
 
-    Ok(())
+  let username = modal_data.username;
+  let user_url = modal_data.url;
+  let reason = modal_data.reason;
+  let discord_id = ctx.author().id;
+
+  let response = make_request(
+    ctx.data().clone(),
+    Some(UserSubmission {
+      username,
+      url: user_url,
+      discord_id: discord_id.into(),
+    }),
+    "/post/user/submit",
+    Method::POST,
+  )
+  .await?;
+  match response {
+    ResponseTypes::Success(user) => {
+      let user: User = user;
+      let user_id_u64: u64 = user_id.into();
+
+      if user_id_u64 != user.discord_id {
+        return send_generic_error_application(ctx, "User not found").await;
+      }
+
+      let avatar_url = match ctx.http().get_user(user_id).await {
+        Ok(user) => user.avatar_url().unwrap(),
+        Err(_) => {
+          return send_generic_error_application(ctx, "User not found").await;
+        }
+      };
+
+      let joined_at_timestamp = match ctx.http().get_member(guild_id, user_id).await?.joined_at {
+        Some(joined_at) => joined_at,
+        None => return send_generic_error_application(ctx, "Failed to get joined at").await,
+      };
+
+      let user_created_at_timestamp = ctx.http().get_user(user_id).await?.created_at();
+
+      let created_at_timestamp =
+        Timestamp::from(DateTime::parse_from_rfc3339(&user.created_at).unwrap());
+
+      let formatted_created_at_timestamp = FormattedTimestamp::new(
+        created_at_timestamp,
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
+
+      let formatted_joined_at_timestamp = FormattedTimestamp::new(
+        joined_at_timestamp,
+        Some(FormattedTimestampStyle::RelativeTime),
+      )
+      .to_string();
+
+      let formatted_user_created_at_timestamp = FormattedTimestamp::new(
+        user_created_at_timestamp,
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
+
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title("Your submission was successful! :3")
+        .author(CreateEmbedAuthor::new(user.username))
+        .thumbnail(avatar_url)
+        .field("User Website", user.url.clone(), false)
+        .field(
+          "Verification",
+          "You're not verified yet, but we'll let you know when you are :3",
+          false,
+        )
+        .field("Created", formatted_created_at_timestamp.clone(), false)
+        .color(Color::from_rgb(0, 0, 255));
+
+      let mut submission_embed = EmbedWrapper::new_application(&ctx)
+        .title("New submission :3")
+        .author(CreateEmbedAuthor::new(format!(
+          "from: {}",
+          ctx.author().name
+        )))
+        .field("Website", user.url, false)
+        .field("Created at", formatted_created_at_timestamp, false)
+        .field("User joined at", formatted_joined_at_timestamp, false)
+        .field(
+          "User Created at",
+          formatted_user_created_at_timestamp,
+          false,
+        )
+        .color(Color::from_rgb(0, 0, 255));
+
+      if let Some(reason) = reason {
+        submission_embed = submission_embed.description(reason);
+      }
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+
+      ctx.send(reply).await?;
+
+      Notif::new(&ctx)
+        .set_embed(submission_embed)
+        .submit(&ctx, user_id.get(), SubmitType::User)
+        .await?;
+    }
+    ResponseTypes::Error(_error) => {
+      let error: ErrorResponse = _error;
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title(format!("Error {}", error.status))
+        .description(error.message)
+        .color(Color::from_rgb(255, 0, 0));
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+
+      ctx.send(reply).await?;
+    }
+  }
+
+  Ok(())
 }
 
 #[command(
-    slash_command,
-    description_localized(
-        locale = "en-US",
-        description = "Edit your petring account information, even when unverified"
-    ),
-    description_localized(
-        locale = "sv-SE",
-        description = "Redigera din petrings kontoinformation, som en verifierad användare"
-    ),
-    name_localized(locale = "en-US", name = "edit_user"),
-    name_localized(locale = "sv-SE", name = "redigera_användare"),
-    category = "PetRing"
+  slash_command,
+  description_localized(
+    locale = "en-US",
+    description = "Edit your petring account information, even when unverified"
+  ),
+  description_localized(
+    locale = "sv-SE",
+    description = "Redigera din petrings kontoinformation, som en verifierad användare"
+  ),
+  name_localized(locale = "en-US", name = "edit_user"),
+  name_localized(locale = "sv-SE", name = "redigera_användare"),
+  category = "PetRing"
 )]
 pub async fn edit_user(ctx: CollarAppContext<'_>) -> Result<(), CollarError> {
-    let modal_data = EditSubmission::execute(ctx).await?;
-    let modal_data = match modal_data {
-        Some(modal_data) => modal_data,
-        None => {
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title("You didn't edit anything")
-                .description("No data was submitted 3:")
-                .color(Color::from_rgb(255, 0, 0));
+  let data = ctx.data();
+  let cache = data.cache.lock().await;
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
+  let user_id = ctx.author().id;
+  let web_base_url = cache.get_web_base_url();
 
-            ctx.send(reply).await?;
-            return Ok(());
-        }
-    };
+  let modal_data = EditSubmission::execute(ctx).await?;
+  let modal_data = match modal_data {
+    Some(modal_data) => modal_data,
+    None => {
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title("You didn't edit anything")
+        .description("No data was submitted 3:")
+        .color(Color::from_rgb(255, 0, 0));
 
-    let username = modal_data.username;
-    let user_url = modal_data.url;
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
 
-    let data = ctx.data();
-    let user_id = ctx.author().id;
-    let base_url = data.web_base_url.clone();
-
-    let response = make_request(
-        data.clone(),
-        Some(UserEditSubmission {
-            username,
-            url: user_url,
-            discord_id: user_id.into(),
-        }),
-        "/patch/user/edit/",
-        Method::PATCH,
-    )
-    .await?;
-    match response {
-        ResponseTypes::Success(user) => {
-            let user: EditedUser = user;
-            let user_id_u64: u64 = user_id.into();
-
-            if user_id_u64 != user.new.discord_id {
-                return Err("User not found".into());
-            }
-
-            let avatar_url = match ctx.http().get_user(user_id).await {
-                Ok(user) => user.avatar_url().unwrap(),
-                Err(_) => {
-                    return Err("User not found".into());
-                }
-            };
-
-            let created_at_timestamp =
-                Timestamp::from(DateTime::parse_from_rfc3339(&user.new.created_at)?);
-
-            let formatted_created_at_timestamp = FormattedTimestamp::new(
-                created_at_timestamp,
-                Some(FormattedTimestampStyle::LongDateTime),
-            )
-            .to_string();
-
-            let mut formatted_edited_at_timestamp = "Never".to_string();
-            let mut formatted_verified_at_timestamp = "Never".to_string();
-
-            if !user.new.verified_at.is_empty() {
-                let verified_at_timestamp =
-                    Timestamp::from(DateTime::parse_from_rfc3339(&user.new.verified_at)?);
-                formatted_verified_at_timestamp = FormattedTimestamp::new(
-                    verified_at_timestamp,
-                    Some(FormattedTimestampStyle::LongDateTime),
-                )
-                .to_string();
-            }
-
-            if !user.new.edited_at.is_empty() {
-                let edited_at_timestamp =
-                    Timestamp::from(DateTime::parse_from_rfc3339(&user.new.edited_at)?);
-                formatted_edited_at_timestamp = FormattedTimestamp::new(
-                    edited_at_timestamp,
-                    Some(FormattedTimestampStyle::RelativeTime),
-                )
-                .to_string();
-            }
-
-            let user_url = format!("{base_url}/user/{}", user.new.username);
-
-            let mut embed = EmbedWrapper::new_application(&ctx)
-                .title("Your edit was successful! :3")
-                .thumbnail(avatar_url.clone())
-                .field("Created", &formatted_created_at_timestamp, false)
-                .field("Verified", &formatted_verified_at_timestamp, false)
-                .field("Edited", &formatted_edited_at_timestamp, false)
-                .color(Color::from_rgb(0, 255, 0));
-
-            let mut user_edit_notif_embed = EmbedWrapper::new_application(&ctx)
-                .title("User edited :3")
-                .thumbnail(avatar_url)
-                .field("Created", &formatted_created_at_timestamp, false)
-                .field("Verified", &formatted_verified_at_timestamp, false)
-                .field("Edited", &formatted_edited_at_timestamp, false)
-                .color(Color::from_rgb(0, 255, 0));
-
-            if user.new.username != user.old.username {
-                embed = embed.author(
-                    CreateEmbedAuthor::new(format!(
-                        "{} → {}",
-                        user.old.username, user.new.username
-                    ))
-                    .url(user_url.clone()),
-                );
-
-                user_edit_notif_embed = user_edit_notif_embed.author(
-                    CreateEmbedAuthor::new(format!(
-                        "{} → {}",
-                        user.old.username, user.new.username
-                    ))
-                    .url(user_url),
-                );
-            } else {
-                embed = embed.author(
-                    CreateEmbedAuthor::new(format!("{} (press here to visit)", user.new.username))
-                        .url(user_url.clone()),
-                );
-                user_edit_notif_embed = user_edit_notif_embed.author(
-                    CreateEmbedAuthor::new(format!("{} (press here to visit)", user.new.username))
-                        .url(user_url),
-                );
-            }
-
-            if user.new.url != user.old.url {
-                embed = embed.field(
-                    "Website",
-                    format!("{} → {}", user.old.url, user.new.url),
-                    false,
-                );
-                user_edit_notif_embed = user_edit_notif_embed.field(
-                    "Website",
-                    format!("{} → {}", user.old.url, user.new.url),
-                    false,
-                );
-            } else {
-                embed = embed.field("Website", user.new.url.clone(), false);
-                user_edit_notif_embed =
-                    user_edit_notif_embed.field("Website", user.new.url.clone(), false);
-            }
-
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
-            ctx.send(reply).await?;
-
-            let mut notif = Notif::new(&ctx);
-            notif = notif.set_embed(user_edit_notif_embed);
-            notif.general(&ctx).await?;
-        }
-        ResponseTypes::Error(_error) => {
-            let error: ErrorResponse = _error;
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title(format!("Error {}", error.status))
-                .description(error.message)
-                .color(Color::from_rgb(255, 0, 0));
-
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
-
-            ctx.send(reply).await?;
-        }
+      ctx.send(reply).await?;
+      return Ok(());
     }
+  };
 
-    Ok(())
+  let username = modal_data.username;
+  let user_url = modal_data.url;
+
+  let response = make_request(
+    data.clone(),
+    Some(UserEditSubmission {
+      username,
+      url: user_url,
+      discord_id: user_id.into(),
+    }),
+    "/patch/user/edit/",
+    Method::PATCH,
+  )
+  .await?;
+  match response {
+    ResponseTypes::Success(user) => {
+      let user: EditedUser = user;
+      let user_id_u64: u64 = user_id.into();
+
+      if user_id_u64 != user.new.discord_id {
+        return send_generic_error_application(ctx, "User not found").await;
+      }
+
+      let avatar_url = match ctx.http().get_user(user_id).await {
+        Ok(user) => user.avatar_url().unwrap(),
+        Err(_) => {
+          return send_generic_error_application(ctx, "User not found").await;
+        }
+      };
+
+      let created_at_timestamp =
+        Timestamp::from(DateTime::parse_from_rfc3339(&user.new.created_at)?);
+
+      let formatted_created_at_timestamp = FormattedTimestamp::new(
+        created_at_timestamp,
+        Some(FormattedTimestampStyle::LongDateTime),
+      )
+      .to_string();
+
+      let mut formatted_edited_at_timestamp = "Never".to_string();
+      let mut formatted_verified_at_timestamp = "Never".to_string();
+
+      if !user.new.verified_at.is_empty() {
+        let verified_at_timestamp =
+          Timestamp::from(DateTime::parse_from_rfc3339(&user.new.verified_at)?);
+        formatted_verified_at_timestamp = FormattedTimestamp::new(
+          verified_at_timestamp,
+          Some(FormattedTimestampStyle::LongDateTime),
+        )
+        .to_string();
+      }
+
+      if !user.new.edited_at.is_empty() {
+        let edited_at_timestamp =
+          Timestamp::from(DateTime::parse_from_rfc3339(&user.new.edited_at)?);
+        formatted_edited_at_timestamp = FormattedTimestamp::new(
+          edited_at_timestamp,
+          Some(FormattedTimestampStyle::RelativeTime),
+        )
+        .to_string();
+      }
+
+      let user_url = format!("{web_base_url}/user/{}", user.new.username);
+
+      let mut embed = EmbedWrapper::new_application(&ctx)
+        .title("Your edit was successful! :3")
+        .thumbnail(avatar_url.clone())
+        .field("Created", &formatted_created_at_timestamp, false)
+        .field("Verified", &formatted_verified_at_timestamp, false)
+        .field("Edited", &formatted_edited_at_timestamp, false)
+        .color(Color::from_rgb(0, 255, 0));
+
+      let mut user_edit_notif_embed = EmbedWrapper::new_application(&ctx)
+        .title("User edited :3")
+        .thumbnail(avatar_url)
+        .field("Created", &formatted_created_at_timestamp, false)
+        .field("Verified", &formatted_verified_at_timestamp, false)
+        .field("Edited", &formatted_edited_at_timestamp, false)
+        .color(Color::from_rgb(0, 255, 0));
+
+      if user.new.username != user.old.username {
+        embed = embed.author(
+          CreateEmbedAuthor::new(format!("{} → {}", user.old.username, user.new.username))
+            .url(user_url.clone()),
+        );
+
+        user_edit_notif_embed = user_edit_notif_embed.author(
+          CreateEmbedAuthor::new(format!("{} → {}", user.old.username, user.new.username))
+            .url(user_url),
+        );
+      } else {
+        embed = embed.author(
+          CreateEmbedAuthor::new(format!("{} (press here to visit)", user.new.username))
+            .url(user_url.clone()),
+        );
+        user_edit_notif_embed = user_edit_notif_embed.author(
+          CreateEmbedAuthor::new(format!("{} (press here to visit)", user.new.username))
+            .url(user_url),
+        );
+      }
+
+      if user.new.url != user.old.url {
+        embed = embed.field(
+          "Website",
+          format!("{} → {}", user.old.url, user.new.url),
+          false,
+        );
+        user_edit_notif_embed = user_edit_notif_embed.field(
+          "Website",
+          format!("{} → {}", user.old.url, user.new.url),
+          false,
+        );
+      } else {
+        embed = embed.field("Website", user.new.url.clone(), false);
+        user_edit_notif_embed = user_edit_notif_embed.field("Website", user.new.url.clone(), false);
+      }
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+      ctx.send(reply).await?;
+
+      Notif::new(&ctx)
+        .set_embed(user_edit_notif_embed)
+        .general(&ctx)
+        .await?;
+    }
+    ResponseTypes::Error(_error) => {
+      let error: ErrorResponse = _error;
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title(format!("Error {}", error.status))
+        .description(error.message)
+        .color(Color::from_rgb(255, 0, 0));
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+
+      ctx.send(reply).await?;
+    }
+  }
+
+  Ok(())
 }
 
 #[command(
-    slash_command,
-    description_localized(locale = "en-US", description = "Verify a submitted petring user"),
-    description_localized(
-        locale = "sv-SE",
-        description = "Verifiera en skickad petring användare"
-    ),
-    name_localized(locale = "en-US", name = "verify_user"),
-    name_localized(locale = "sv-SE", name = "verifiera_användare"),
-    category = "PetRing",
-    required_permissions = "MANAGE_CHANNELS | BAN_MEMBERS | KICK_MEMBERS | MUTE_MEMBERS"
+  slash_command,
+  description_localized(locale = "en-US", description = "Verify a submitted petring user"),
+  description_localized(
+    locale = "sv-SE",
+    description = "Verifiera en skickad petring användare"
+  ),
+  name_localized(locale = "en-US", name = "verify_user"),
+  name_localized(locale = "sv-SE", name = "verifiera_användare"),
+  category = "PetRing",
+  required_permissions = "MANAGE_CHANNELS | BAN_MEMBERS | KICK_MEMBERS | MUTE_MEMBERS"
 )]
 pub async fn verify_user(
-    ctx: CollarAppContext<'_>,
-    user: serenity::User,
+  ctx: CollarAppContext<'_>,
+  user: serenity::User,
 ) -> Result<(), CollarError> {
-    let user_id = user.id;
-    let url = format!("/patch/user/verify/{}", user_id);
+  let user_id = user.id;
+  let url = format!("/patch/user/verify/{}", user_id);
 
-    let user_name = user.clone().name;
-    let user_mention = user.mention();
+  let user_mention = user.mention();
 
-    let response = make_request(ctx.data().clone(), None::<String>, &url, Method::PATCH).await?;
-    match response {
-        ResponseTypes::Success(user) => {
-            let user: User = user;
+  let data = ctx.data();
+  let cache = data.cache.lock().await;
 
-            if !user.verified {
-                return Err("User failed to verify".into());
-            }
+  let response = make_request(ctx.data().clone(), None::<String>, &url, Method::PATCH).await?;
+  match response {
+    ResponseTypes::Success(_user) => {
+      let petring_user: User = _user;
 
-            let user_id_u64: u64 = user_id.into();
-            if user_id_u64 != user.discord_id {
-                return Err("User not found".into());
-            }
+      if !petring_user.verified {
+        return send_generic_error_application(ctx, "User failed to verify").await;
+      }
 
-            let avatar_url = match ctx.http().get_user(user_id).await {
-                Ok(user) => user.avatar_url().unwrap(),
-                Err(_) => {
-                    return Err("User not found".into());
-                }
-            };
+      let user_id_u64: u64 = user_id.into();
+      if user_id_u64 != petring_user.discord_id {
+        return send_generic_error_application(ctx, "User not found").await;
+      }
 
-            let created_at_timestamp = FormattedTimestamp::from(Timestamp::from(
-                DateTime::parse_from_rfc3339(&user.created_at).unwrap(),
-            ))
-            .to_string();
+      let user_pfp = user.face();
 
-            let verified_at_timestamp = FormattedTimestamp::from(Timestamp::from(
-                DateTime::parse_from_rfc3339(&user.verified_at).unwrap(),
-            ))
-            .to_string();
+      let created_at_timestamp = FormattedTimestamp::from(Timestamp::from(
+        DateTime::parse_from_rfc3339(&petring_user.created_at).unwrap(),
+      ))
+      .to_string();
 
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title("Your verification was successful")
-                .author(CreateEmbedAuthor::new(format!("for: {}", user.username)))
-                .url(user.url.clone())
-                .thumbnail(avatar_url)
-                .field("Created", created_at_timestamp, false)
-                .field("Verified", verified_at_timestamp, false)
-                .color(Color::from_rgb(0, 255, 0));
+      let verified_at_timestamp = FormattedTimestamp::from(Timestamp::from(
+        DateTime::parse_from_rfc3339(&petring_user.verified_at).unwrap(),
+      ))
+      .to_string();
 
-            let dm_user_verify_embed = EmbedWrapper::new_application(&ctx)
-                .title("You've been verified!!")
-                .description(format!("Hi there, {user_mention}, you've been verified :3"))
-                .author(CreateEmbedAuthor::new(user_name))
-                .color(Color::from_rgb(0, 255, 0));
+      let web_base_url = cache.get_web_base_url();
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title("Your verification was successful")
+        .author(
+          CreateEmbedAuthor::new(format!("for: {}", user.name))
+            .icon_url(&user_pfp)
+            .url(format!("{web_base_url}/user/{}", &petring_user.username)),
+        )
+        .field("Created", created_at_timestamp, false)
+        .field("Verified", verified_at_timestamp, false)
+        .color(Color::from_rgb(0, 255, 0));
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
+      let dm_user_verify_embed = EmbedWrapper::new_application(&ctx)
+        .title("You've been verified!!")
+        .description(format!("Hi there, {user_mention}, you've been verified :3"))
+        .author(
+          CreateEmbedAuthor::new(format!("Verified by: {}", ctx.author().name))
+            .icon_url(ctx.author().face()),
+        )
+        .color(Color::from_rgb(0, 255, 0));
 
-            ctx.send(reply).await?;
+      let user_verification_done_embed = EmbedWrapper::new_application(&ctx)
+        .title("A User has been verified :3")
+        .description(format!("Verified user: {}", user_mention))
+        .author(
+          CreateEmbedAuthor::new(format!("Verified by: {}", ctx.author().name))
+            .icon_url(ctx.author().face()),
+        )
+        .color(Color::from_rgb(0, 255, 0));
 
-            info!("Sending user notif dm");
-            let mut notif = Notif::new(&ctx);
-            notif = notif.set_embed(dm_user_verify_embed);
-            notif.dm_notif(&ctx, user_id.get()).await?;
-        }
-        ResponseTypes::Error(_error) => {
-            let error: ErrorResponse = _error;
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
 
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title(format!("Error {}", error.status))
-                .description(error.message)
-                .color(Color::from_rgb(255, 0, 0));
+      ctx.send(reply).await?;
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
+      info!("Sending user notif dm");
 
-            ctx.send(reply).await?;
-        }
+      Notif::new(&ctx)
+        .set_embed(dm_user_verify_embed)
+        .dm_notif(&ctx, user_id.get())
+        .await?;
+
+      Notif::new(&ctx)
+        .set_embed(user_verification_done_embed)
+        .verification(&ctx, VerifyType::User)
+        .await?;
     }
+    ResponseTypes::Error(_error) => {
+      let error: ErrorResponse = _error;
 
-    Ok(())
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title(format!("Error {}", error.status))
+        .description(error.message)
+        .color(Color::from_rgb(255, 0, 0));
+
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+
+      ctx.send(reply).await?;
+    }
+  }
+
+  Ok(())
 }
 
 #[command(
-    slash_command,
-    description_localized(
-        locale = "en-US",
-        description = "Delete a petring user (doesn't matter if they're verified or not)"
-    ),
-    description_localized(
-        locale = "sv-SE",
-        description = "Radera en petring användare (spelar ingen roll om de är verifierade eller inte)"
-    ),
-    name_localized(locale = "en-US", name = "remove_user"),
-    name_localized(locale = "sv-SE", name = "radera_användare"),
-    category = "PetRing",
-    required_permissions = "MANAGE_CHANNELS | BAN_MEMBERS | KICK_MEMBERS | MUTE_MEMBERS"
+  slash_command,
+  description_localized(
+    locale = "en-US",
+    description = "Delete a petring user (doesn't matter if they're verified or not)"
+  ),
+  description_localized(
+    locale = "sv-SE",
+    description = "Radera en petring användare (spelar ingen roll om de är verifierade eller inte)"
+  ),
+  name_localized(locale = "en-US", name = "remove_user"),
+  name_localized(locale = "sv-SE", name = "radera_användare"),
+  category = "PetRing",
+  required_permissions = "MANAGE_CHANNELS | BAN_MEMBERS | KICK_MEMBERS | MUTE_MEMBERS"
 )]
 pub async fn remove_user(
-    ctx: CollarAppContext<'_>,
-    user: serenity::User,
+  ctx: CollarAppContext<'_>,
+  user: serenity::User,
 ) -> Result<(), CollarError> {
-    let user_id = user.id;
-    let url = format!("/delete/user/by-discord/{}", user_id);
+  let user_id = user.id;
+  let url = format!("/delete/user/by-discord/{}", user_id);
 
-    let response = make_request(ctx.data().clone(), None::<String>, &url, Method::DELETE).await?;
-    match response {
-        ResponseTypes::Success(response) => {
-            let deleted_user: User = response;
+  let response = make_request(ctx.data().clone(), None::<String>, &url, Method::DELETE).await?;
+  match response {
+    ResponseTypes::Success(response) => {
+      let deleted_user: User = response;
 
-            let user_mention = ctx.http().get_user(user_id).await?.mention();
-            let user_pfp = ctx.http().get_user(user_id).await?.avatar_url().unwrap();
+      let user_mention = user.mention();
+      let user_pfp = user.face();
 
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title("Successfully removed user :3")
-                .description(format!(
-                    "{user_mention} ({}): removed :3",
-                    deleted_user.discord_id
-                ))
-                .thumbnail(user_pfp)
-                .color(Color::from_rgb(255, 0, 0));
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title("Successfully removed user :3")
+        .description(format!("{user_mention} has been removed :3",))
+        .author(CreateEmbedAuthor::new(format!("Bye {}", user.name)).icon_url(&user_pfp))
+        .color(Color::from_rgb(255, 0, 0));
 
-            let user_delete_notif_embed = EmbedWrapper::new_application(&ctx)
-                .title("User deleted 3:")
-                .description(format!(
-                    "{user_mention}, also known as {} got their spot deleted in the petring 3':",
-                    deleted_user.username
-                ))
-                .color(Color::from_rgb(255, 0, 0));
+      let user_delete_notif_embed = EmbedWrapper::new_application(&ctx)
+        .title("User deleted 3:")
+        .description(format!(
+          "{user_mention}, also known as {} got their spot deleted in the petring 3':",
+          deleted_user.username
+        ))
+        .author(
+          CreateEmbedAuthor::new(format!("Deleted by: {}", ctx.author().name)).icon_url(&user_pfp),
+        )
+        .color(Color::from_rgb(255, 0, 0));
 
-            let reply = CreateReply::default()
-                .embed(embed)
-                .reply(true)
-                .ephemeral(true);
-            ctx.send(reply).await?;
+      let reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .ephemeral(true);
+      ctx.send(reply).await?;
 
-            let mut notif = Notif::new(&ctx);
-            notif = notif.set_embed(user_delete_notif_embed);
-            notif.general(&ctx).await?;
-        }
-        ResponseTypes::Error(_error) => {
-            let error: ErrorResponse = _error;
-
-            let embed = EmbedWrapper::new_application(&ctx)
-                .title(format!("Error {}", error.status))
-                .description(error.message)
-                .color(Color::from_rgb(255, 0, 0));
-
-            let reply = CreateReply::default().embed(embed).reply(true);
-            ctx.send(reply).await?;
-        }
+      Notif::new(&ctx)
+        .set_embed(user_delete_notif_embed)
+        .general(&ctx)
+        .await?;
     }
+    ResponseTypes::Error(_error) => {
+      let error: ErrorResponse = _error;
 
-    Ok(())
+      let embed = EmbedWrapper::new_application(&ctx)
+        .title(format!("Error {}", error.status))
+        .description(error.message)
+        .color(Color::from_rgb(255, 0, 0));
+
+      let reply = CreateReply::default().embed(embed).reply(true);
+      ctx.send(reply).await?;
+    }
+  }
+
+  Ok(())
 }
