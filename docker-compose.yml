@@ -1,0 +1,25 @@
+services:
+  collar:
+    container_name: collar
+    build: . # <- Comment this out and uncomment the thing below if you're not cloning the repo
+    # image: ghcr.io/h4rldev/collar:latest
+    labels:
+      com.centurylinklabs.watchtower.scope: collar
+
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - API_BASE_URL=${API_BASE_URL}
+      - WEB_BASE_URL=${WEB_BASE_URL}
+      - BOT_ID=${BOT_ID}
+
+    volumes:
+      - ./.cache.json:/app/.cache.json
+
+  #   watchtower: # For auto-updates
+  #     image: containrrr/watchtower
+  #     container_name: watchtower_petring
+  #     volumes:
+  #       - "/var/run/docker.sock:/var/run/docker.sock"
+  #     command: --interval 30 --scope collar
+  #     labels:
+  #       com.centurylinklabs.watchtower.scope: collar
