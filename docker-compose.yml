@@ -11,13 +11,14 @@ services:
       - API_BASE_URL=${API_BASE_URL}
       - WEB_BASE_URL=${WEB_BASE_URL}
       - BOT_ID=${BOT_ID}
+      - CACHE_PATH=/app/cache/.cache.json
 
     volumes:
-      - ./.cache.json:/app/.cache.json
+      - ./cache/:/app/cache/
 
   #   watchtower: # For auto-updates
   #     image: containrrr/watchtower
-  #     container_name: watchtower_petring
+  #     container_name: watchtower_collar
   #     volumes:
   #       - "/var/run/docker.sock:/var/run/docker.sock"
   #     command: --interval 30 --scope collar

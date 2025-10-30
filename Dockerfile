@@ -19,7 +19,10 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     pkg-config \
     gcc \
-    sqlite3 --no-install-recommends
+    openssl \
+    # For debugging connectivity issues
+    curl \
+    --no-install-recommends
 
 COPY --from=planner /app/recipe.json recipe.json
 

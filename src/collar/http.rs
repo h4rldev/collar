@@ -2,7 +2,7 @@ use super::{Cache, Collar, CollarError, Secrets};
 use dotenvy::dotenv;
 use reqwest::{Client, Method, StatusCode};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, io::Write, time::Duration};
+use std::{fmt::Debug, time::Duration};
 use tokio::time::sleep;
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
@@ -101,13 +101,6 @@ impl Secrets {
 
     if status.is_success() {
       let secrets: Secrets = serde_json::from_str(&response).unwrap();
-
-      info!("Refreshed secrets");
-
-      let mut file_to_write = std::fs::File::create(".secrets.json")?;
-      let secrets_str = serde_json::to_string(&secrets)?;
-      file_to_write.write_all(secrets_str.as_bytes())?;
-
       return Ok(secrets);
     }
 

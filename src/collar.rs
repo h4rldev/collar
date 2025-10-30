@@ -12,7 +12,7 @@ use tokio::{
   sync::Mutex,
   time::{Duration, Instant, interval_at},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub(crate) mod commands;
 pub(crate) mod http;
@@ -140,8 +140,11 @@ impl Cache {
   }
 
   pub fn read_from_disk(&self) -> Result<Self, CollarError> {
+    dotenv().ok();
+    let path = std::env::var("CACHE_PATH").unwrap_or(".cache.json".to_string());
+
     let mut cache_buf = String::new();
-    let mut cache_file = match std::fs::File::open(".cache.json") {
+    let mut cache_file = match std::fs::File::open(path) {
       Ok(file) => file,
       Err(err) => {
         return Err(CollarError::from(format!(
@@ -168,7 +171,9 @@ impl Cache {
   }
 
   pub fn write_to_disk(&self) -> Result<(), CollarError> {
-    let mut file_to_write = std::fs::File::create(".cache.json")?;
+    dotenv().ok();
+    let path = std::env::var("CACHE_PATH").unwrap_or(".cache.json".to_string());
+    let mut file_to_write = std::fs::File::create(path)?;
     let secrets_str = serde_json::to_string(&self)?;
 
     match file_to_write.write_all(secrets_str.as_bytes()) {
@@ -312,7 +317,7 @@ impl Collar {
       match Cache::new().read_from_disk() {
         Ok(cache) => cache,
         Err(err) => {
-          error!("Failed to read cache from disk: {:?}", err);
+          warn!("Failed to read cache from disk: {:?}, using defaults", err);
           Cache::default()
         }
       }
